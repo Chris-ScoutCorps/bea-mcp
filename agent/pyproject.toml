@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "bea-mcp"
+version = "0.1.0"
+description = "Natural language interface for the BEA's site and API"
+authors = ["Chris Shaffer <chris@scoutcorpsllc.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.13"
+playwright = "*"
+beautifulsoup4 = "*"
+openai = "*"
+python-dotenv = "*"
+langchain = "*"
+langchain-community = "*"
+langchain-openai = "*"
+flask = "*"
+debugpy = "*"
+pymongo = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -358,15 +358,20 @@ def hybrid_text_vector_search(
     limit: int = 25,
     num_candidates: int = 200,
     mode: str = "atlas_compound",
+    dataset_name_filter: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Hybrid search combining text and vector relevance when possible.
 
-    Modes:
+        Modes:
       - "atlas_compound": Uses Atlas Search compound (requires Atlas Search) with knnBeta + text.
       - "sequential": Run vector then filter/refine with text score (fallback when no compound).
       - "text_only" / "vector_only": Force a single modality.
 
     If neither Atlas Search nor vector is supported, returns text-only or empty list.
+
+        dataset_name_filter:
+                If provided, results will be restricted to documents whose 'dataset_name' exactly matches.
+                Pushdown: For atlas_compound we attempt an equals filter; for fallback paths we filter after retrieval.
     """
     db = get_database()
     coll = db[collection_name]
@@ -381,6 +386,13 @@ def hybrid_text_vector_search(
     if mode == "atlas_compound" and (text_query or query_vector is not None):
         # Attempt compound using Atlas Search
         compound: Dict[str, Any] = {"must": [], "should": []}
+        if dataset_name_filter:
+            # Use filter clause for exact match if supported
+            # 'equals' operator (Atlas Search) is more explicit than text for exact string equality
+            # Fallback will occur automatically if not supported (caught by exception below)
+            compound["filter"] = [
+                {"equals": {"path": "dataset_name", "value": dataset_name_filter}}
+            ]
         if text_query:
             compound["must"].append({
                 "text": {
@@ -406,7 +418,11 @@ def hybrid_text_vector_search(
             {"$limit": limit}
         ]
         try:
-            return list(coll.aggregate(pipeline))
+            results = list(coll.aggregate(pipeline))
+            # Post-filter safeguard (in case equals not supported or mismatch)
+            if dataset_name_filter:
+                results = [r for r in results if r.get("dataset_name") == dataset_name_filter]
+            return results
         except OperationFailure:
             # Fall back to sequential approach
             pass
@@ -423,6 +439,13 @@ def hybrid_text_vector_search(
         text_docs = list(text_cursor)
     else:
         text_docs = []
+
+    # Apply post-filter if dataset_name_filter specified
+    if dataset_name_filter:
+        if vector_results:
+            vector_results = [d for d in vector_results if d.get("dataset_name") == dataset_name_filter]
+        if text_docs:
+            text_docs = [d for d in text_docs if d.get("dataset_name") == dataset_name_filter]
 
     if vector_results and text_docs:
         # Simple merge heuristic: map _id to best combined rank sum

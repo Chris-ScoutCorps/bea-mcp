@@ -9,6 +9,8 @@ from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, OperationFailure
 
+from embeddings import embed_documents
+
 class Collections(Enum):
     """Enum for MongoDB collection names"""
     DATASETS = "datasets"
@@ -103,6 +105,13 @@ def refresh_data_lookup(documents: List[Dict]) -> bool:
     collection = ensure_collection(Collections.DATA_LOOKUP.value)
     result = collection.delete_many({})
     print(f"Cleared {result.deleted_count} existing documents from data_lookup")
+    # If documents lack embeddings, attempt to embed them (best-effort)
+    if documents and "embedding" not in documents[0]:
+        try:
+            documents = embed_documents(documents)
+            print("Embeddings generated for documents.")
+        except Exception as e:
+            print(f"Warning: could not embed documents automatically: {e}")
     result = collection.insert_many(documents)
     print(f"Inserted {len(result.inserted_ids)} new documents into data_lookup")
     # Attempt to (re)create vector search index (Atlas / Atlas Local only)
@@ -146,7 +155,6 @@ def create_vector_search_index(
         True if index creation command succeeded, False otherwise.
     """
     db = get_database()
-    coll = db[collection_name]
 
     # Build mapping definition
     # Atlas / Atlas Local expects 'knnVector' (NOT 'vector') and 'dimensions' key.
@@ -215,7 +223,8 @@ def vector_search(
     Falls back to returning an empty list if the stage is unsupported.
     """
     db = get_database()
-    pipeline: List[Dict[str, Any]] = [
+    # Attempt native $vectorSearch first
+    pipeline_vs: List[Dict[str, Any]] = [
         {
             "$vectorSearch": {
                 "index": index_name,
@@ -227,12 +236,72 @@ def vector_search(
         }
     ]
     if project:
-        pipeline.append({"$project": project})
+        pipeline_vs.append({"$project": project})
     try:
-        return list(db[collection_name].aggregate(pipeline))
+        return list(db[collection_name].aggregate(pipeline_vs))
     except OperationFailure as oe:
-        print(f"Vector search not supported or failed: {oe}")
+        msg = str(oe)
+        # Fallback: try knnBeta inside $search (older Atlas Search syntax)
+        if "Unrecognized pipeline stage name: '$vectorSearch'" in msg or "Location40324" in msg:
+            pipeline_knn: List[Dict[str, Any]] = [
+                {
+                    "$search": {
+                        "index": index_name,
+                        "knnBeta": {
+                            "path": embedding_field,
+                            "vector": query_vector,
+                            "k": limit if limit < num_candidates else min(num_candidates, 1000)
+                        }
+                    }
+                },
+                {"$limit": limit}
+            ]
+            if project:
+                pipeline_knn.append({"$project": project})
+            try:
+                return list(db[collection_name].aggregate(pipeline_knn))
+            except OperationFailure as oe2:
+                print(f"Vector search fallback (knnBeta) failed: {oe2}")
+                return []
+        print(f"Vector search failed: {oe}")
         return []
+
+def detect_vector_capability() -> Dict[str, bool]:
+    """Detect available vector search capabilities.
+
+    Returns dict flags: { 'vectorSearchStage': bool, 'knnBeta': bool }
+    Lightweight heuristic: run a dummy aggregation that will fail fast if unsupported.
+    """
+    flags = {"vectorSearchStage": False, "knnBeta": False}
+    db = get_database()
+    coll = db[Collections.DATA_LOOKUP.value]
+    # Try $vectorSearch
+    try:
+        coll.aggregate([
+            {"$vectorSearch": {"index": "__nonexistent__", "path": "embedding", "queryVector": [0.0], "numCandidates": 1, "limit": 1}}
+        ]).close()
+        flags["vectorSearchStage"] = True
+    except OperationFailure as oe:
+        if "Unrecognized pipeline stage name" not in str(oe):
+            # Some other error means stage exists but parameters bad
+            if "failed to parse" in str(oe) or "Failed to find index" in str(oe):
+                flags["vectorSearchStage"] = True
+    except Exception:
+        pass
+    # Try knnBeta via $search
+    try:
+        coll.aggregate([
+            {"$search": {"index": "__nonexistent__", "knnBeta": {"path": "embedding", "vector": [0.0], "k": 1}}},
+            {"$limit": 1}
+        ]).close()
+        flags["knnBeta"] = True
+    except OperationFailure as oe:
+        if "Failed to parse" in str(oe) or "index not found" in str(oe):
+            flags["knnBeta"] = True
+    except Exception:
+        pass
+    print(f"Vector capability detection: {flags}")
+    return flags
 
 def ensure_text_index(
     collection_name: str = Collections.DATA_LOOKUP.value,
@@ -286,7 +355,7 @@ def hybrid_text_vector_search(
     vector_index: str = "data_lookup_vector",
     vector_field: str = "embedding",
     text_fields: Optional[List[str]] = None,
-    limit: int = 10,
+    limit: int = 25,
     num_candidates: int = 200,
     mode: str = "atlas_compound",
 ) -> List[Dict[str, Any]]:

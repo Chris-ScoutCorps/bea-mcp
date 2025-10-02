@@ -8,8 +8,9 @@ from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain.chains import RetrievalQA
 
 from api import fetch_and_upsert_bea_datasets
-from database import get_all_datasets, refresh_data_lookup
+from database import get_all_datasets, refresh_data_lookup, hybrid_text_vector_search
 from lookup import build_lookup_documents
+from embeddings import embed_query
 
 def get_llm():
     return ChatOpenAI(model="gpt-5-2025-08-07", temperature=0, max_tokens=8192)
@@ -35,6 +36,19 @@ if __name__ == "__main__":
         question = input("Ask a question (or 'exit'): ")
         if question.strip().lower() == 'exit':
             break
-        print('ok')
+
+        results = hybrid_text_vector_search(
+            text_query=question,
+            query_vector=embed_query(question)
+        )
+
+        for result in results:
+            print(f"Dataset: {result.get('dataset_name')}")
+            if 'table_name' in result:
+                print(f"   Table: {result.get('table_name')}")
+            print(f"   Description: {result.get('dataset_description')}")
+            if 'table_description' in result:
+                print(f"   Table Description: {result.get('table_description')}")
+
         #answer = qa_chain.invoke(question)
         #print("\nAnswer:", answer['result'], "\n")

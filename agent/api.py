@@ -89,7 +89,7 @@ def fetch_and_upsert_bea_datasets() -> Dict[str, int]:
             upsert_dataset(dataset_name, dataset)
 
         print(f"Found {len(datasets)} data sets")
-        return {'success': len(datasets)}
+        return datasets
         
     except Exception as e:
         print(f"Error processing datasets: {e}")

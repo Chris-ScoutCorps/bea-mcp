@@ -12,6 +12,7 @@ from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 class Collections(Enum):
     """Enum for MongoDB collection names"""
     DATASETS = "datasets"
+    DATA_LOOKUP = "data_lookup"
 
 # MongoDB connection
 def get_mongo_client() -> MongoClient:
@@ -88,3 +89,19 @@ def get_all_datasets() -> List[Dict[str, str]]:
     except Exception as e:
         print(f"Error retrieving datasets: {e}")
         return []
+
+def refresh_data_lookup(documents: List[Dict]) -> bool:
+    """
+    Clear the data_lookup collection and insert new documents.
+    
+    Args:
+        documents: List of documents to insert into the collection
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    collection = ensure_collection(Collections.DATA_LOOKUP.value)
+    result = collection.delete_many({})
+    print(f"Cleared {result.deleted_count} existing documents from data_lookup")
+    result = collection.insert_many(documents)
+    print(f"Inserted {len(result.inserted_ids)} new documents into data_lookup")

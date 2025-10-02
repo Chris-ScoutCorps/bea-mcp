@@ -6,7 +6,11 @@ services:
       context: ./agent
       dockerfile: Dockerfile
     environment:
-      MONGO_URI: mongodb://root:example@mongo:27017/
+      # Include database name and authSource; adjust if you disable auth.
+      MONGO_URI: mongodb://root:example@atlas:27017/?authSource=admin
+    depends_on:
+      atlas:
+        condition: service_healthy
     volumes:
       - ./agent:/app
     ports:
@@ -15,17 +19,38 @@ services:
     stdin_open: true
     tty: true
 
-  mongo:
-    image: mongodb/mongodb-community-server:8.2.0-ubi8
-    container_name: bea-mongo
+  atlas:
+    image: mongodb/mongodb-atlas-local:7.0.1-20251002T100511Z
+    container_name: bea-atlas
     #restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
+      MONGODB_INITDB_ROOT_USERNAME: root
+      MONGODB_INITDB_ROOT_PASSWORD: example
+      MONGODB_INITDB_DATABASE: BEA
+      DO_NOT_TRACK: "1"  # Opt-out of telemetry (set to 0 or remove to enable)
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep 1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - atlas_data:/data/db
+
+  # mongo:
+  #   image: mongodb/mongodb-community-server:8.2.0-ubi8
+  #   container_name: bea-mongo
+  #   #restart: unless-stopped
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: root
+  #     MONGO_INITDB_ROOT_PASSWORD: example
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongo_data:/data/db
 
 volumes:
   mongo_data:
+  atlas_data:

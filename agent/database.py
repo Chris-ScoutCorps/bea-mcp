@@ -3,7 +3,7 @@ load_dotenv()
 
 import os
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, Dict
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -43,13 +43,13 @@ def ensure_collection(name: str) -> Collection:
 
     return db[name]
 
-def upsert_dataset(dataset_name: str, dataset_description: str) -> bool:
+def upsert_dataset(dataset_name: str, dataset: Dict[str, str]) -> bool:
     """
     Upsert a dataset in the datasets collection.
     
     Args:
         dataset_name: Unique name for the dataset
-        dataset_description: Description of the dataset
+        dataset: Dictionary containing dataset information
     
     Returns:
         True if successful, False otherwise
@@ -62,7 +62,8 @@ def upsert_dataset(dataset_name: str, dataset_description: str) -> bool:
             {
                 '$set': {
                     'DatasetName': dataset_name,
-                    'DatasetDescription': dataset_description
+                    'DatasetDescription': dataset.get('DatasetDescription', ''),
+                    'Parameters': dataset.get('Parameters', [])
                 }
             },
             upsert=True
@@ -71,3 +72,19 @@ def upsert_dataset(dataset_name: str, dataset_description: str) -> bool:
     except Exception as e:
         print(f"Error upserting dataset: {e}")
         return False
+
+def get_all_datasets() -> List[Dict[str, str]]:
+    """
+    Get all datasets from the database.
+    
+    Returns:
+        List of dictionaries containing dataset information
+    """
+    collection = ensure_collection(Collections.DATASETS.value)
+    
+    try:
+        datasets = list(collection.find({}, {'_id': 0}))  # Exclude _id field
+        return datasets
+    except Exception as e:
+        print(f"Error retrieving datasets: {e}")
+        return []

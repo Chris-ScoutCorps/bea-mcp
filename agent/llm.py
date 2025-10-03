@@ -7,4 +7,4 @@ def get_medium_llm():
     return ChatOpenAI(model="gpt-4", temperature=0)
 
 def get_large_llm():
-    return ChatOpenAI(model="gpt-5-2025-08-07", temperature=0)
+    return ChatOpenAI(model="gpt-5-2025-08-07", temperature=1)

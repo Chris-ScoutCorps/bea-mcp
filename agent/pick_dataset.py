@@ -1,4 +1,5 @@
 import json
+import copy
 from llm import get_small_llm, get_medium_llm, get_large_llm
 from database import hybrid_text_vector_search
 from embeddings import embed_query
@@ -124,7 +125,8 @@ def get_query_builder_context(dataset_name: str, table_name: str, full_datasets:
     matching = [d for d in full_datasets if d.get('DatasetName') == dataset_name]
     if not matching:
         raise ValueError(f"Dataset '{dataset_name}' not found")
-    dataset = matching[0]
+    # Deep copy to avoid mutating the original dataset stored in full_datasets
+    dataset = copy.deepcopy(matching[0])
 
     # 2. If table_name is None or empty, return the dataset as-is
     if not table_name:
@@ -134,8 +136,7 @@ def get_query_builder_context(dataset_name: str, table_name: str, full_datasets:
     params = dataset.get('Parameters', [])
     filtered_params = []
     for p in params:
-        pname = p.get('ParameterName', '')
-        if pname.lower() in ('tablename', 'tableid'):
+        if p.get('ParameterName', '').lower() in ('tablename', 'tableid') and for_eval:
             continue
         filtered_params.append(p)
 
@@ -148,6 +149,12 @@ def get_query_builder_context(dataset_name: str, table_name: str, full_datasets:
         if p.get('ParameterName', '').lower() == 'geofips' and for_eval:
             p['Values'] = []
             p['Values-Note'] = "Too many GeoFIPS values to list; omitted for evaluation."
+            continue
+
+        if p.get('ParameterName', '').lower() in ('tablename', 'tableid'):
+            new_values = [v for v in values if isinstance(v, dict) and v.get('TableName', v.get('Key', None)) == table_name]
+            p['Values'] = new_values
+            p['Values-Note'] = "Table parameter filtered to the selected table."
             continue
 
         if any('TableName' in v for v in values if isinstance(v, dict)):

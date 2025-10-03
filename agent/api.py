@@ -50,6 +50,12 @@ def fetch_from_bea_api(method: str, itemname: str, params: Optional[Dict[str, st
     else:
         return [items] 
 
+def fetch_data_from_bea_api(params: Optional[Dict[str, str]] = None) -> Dict:
+    return fetch_from_bea_api('GetData', 'Data', params)
+
+def fetch_data_from_bea_api_url(params: Optional[Dict[str, str]] = None) -> Dict:
+    return build_bea_api_url('GetData', params)
+
 def fetch_and_upsert_bea_datasets() -> Dict[str, int]:
     """
     Fetch BEA datasets from API and upsert them to the database.

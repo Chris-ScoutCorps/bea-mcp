@@ -235,6 +235,7 @@ Score (0-100):
 
         scored.append({
             'dataset_name': ds_name,
+            'table_name': ds.get('table_name', None),
             'score': score,
         })
 

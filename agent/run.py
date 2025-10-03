@@ -10,7 +10,7 @@ from langchain.chains import RetrievalQA
 from api import fetch_and_upsert_bea_datasets
 from database import get_all_datasets, refresh_data_lookup
 from lookup import build_lookup_documents
-from pick_dataset import smart_search, score_and_select_top, print_datasets
+from pick_dataset import get_query_builder_context, smart_search, score_and_select_top, print_datasets
 
 if __name__ == "__main__":
     # Check for existing datasets
@@ -41,4 +41,15 @@ if __name__ == "__main__":
         print("Top 10 datasets by LLM confidence:")
         print_datasets(top10)
 
-        # Optionally, could proceed with retrieval/answering using top10 later
+        if not top10:
+            print("No relevant datasets found.")
+            continue
+
+        ctx = get_query_builder_context(
+            dataset_name=top10[0]['dataset_name'],
+            table_name=top10[0].get('table_name', None),
+            full_datasets=datasets,
+            for_eval=True,
+        )
+        print("Context for query builder:")
+        print(json.dumps(ctx, indent=2))

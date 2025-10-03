@@ -40,6 +40,8 @@ def fetch_from_bea_api(method: str, itemname: str, params: Optional[Dict[str, st
     data = _fetch()
     if 'error' in data:
         raise ValueError(f"Error fetching data: {data['error']}")
+    if data.get('BEAAPI', {}).get('Error', None):
+        raise ValueError(f"BEA API returned an error: {json.dumps(data['BEAAPI']['Error'], indent=2)}")
 
     # Navigate to the items
     items = data.get('BEAAPI', {}).get('Results', {}).get(itemname, [])

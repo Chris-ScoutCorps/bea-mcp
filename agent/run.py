@@ -18,8 +18,7 @@ def build_bea_params_with_llm(question: str, context: dict) -> dict:
     """Use the large LLM to propose BEA API params strictly from context."""
     llm = get_large_llm()
 
-    # Trim context to avoid overflowing tokens
-    context_json = json.dumps(context)[:8000]
+    context_json = json.dumps(context)
 
     prompt = f"""
 You are given a user question and a JSON context describing a BEA dataset (and optional selected table) with its parameters and allowed values.
@@ -81,6 +80,74 @@ JSON:
 
     return params
 
+def correct_bea_params_with_llm(error_message: str, question: str, context: dict, current_params: dict) -> dict:
+    """Use large LLM to attempt a minimal correction of BEA API params after an error."""
+    llm = get_large_llm()
+    context_json = json.dumps(context)
+    current_json = json.dumps(current_params)
+    required_params = list_required_parameters(context) or "<none>"
+
+    prompt = f"""
+You are fixing BEA GetData API parameters.
+Return ONLY corrected JSON (single object) with minimal changes.
+
+User Question: {question}
+Error Message: {error_message}
+Required Parameters: {required_params}
+Current Params: {current_json}
+Context JSON: {context_json}
+
+Guidelines:
+- Include all required parameters; never remove one.
+- Keep DatasetName unchanged.
+- If a parameter value is invalid or missing, substitute a valid one from context; otherwise leave it.
+- If Year / FirstYear / LastYear are invalid or out of range, adjust within allowed bounds shown in context.
+- Do NOT fabricate any new parameter.
+
+JSON:
+"""
+
+    response = llm.invoke(prompt)
+    content = getattr(response, 'content', str(response)).strip()
+
+    def _extract_json(text: str) -> str:
+        first = text.find('{')
+        last = text.rfind('}')
+        if first != -1 and last != -1 and last > first:
+            return text[first:last+1]
+        return text
+
+    snippet = _extract_json(content)
+    try:
+        revised = json.loads(snippet)
+        if not isinstance(revised, dict):
+            raise ValueError()
+    except Exception:
+        revised = dict(current_params)  # fallback to original
+
+    # Ensure DatasetName present
+    ds_name = context.get('DatasetName') or context.get('dataset_name')
+    if ds_name:
+        revised.setdefault('DatasetName', ds_name)
+
+    # Ensure required params present (if context lists them and possible AllValue exists)
+    # (Light-touch: just warn by printing if missing)
+    missing = []
+    if required_params and required_params != '<none>':
+        for rp in [r.strip() for r in required_params.split(',') if r.strip()]:
+            if rp not in revised:
+                missing.append(rp)
+    if missing:
+        print(f"Warning: corrected params still missing required: {missing}")
+
+    # Normalize Year conflict
+    if 'Year' in revised and ('FirstYear' in revised or 'LastYear' in revised):
+        # prefer explicit range if both present; otherwise keep Year
+        if 'FirstYear' in revised or 'LastYear' in revised:
+            revised.pop('Year', None)
+
+    return revised
+
 def list_required_parameters(context: dict) -> str:
     """Return a comma-delimited string of required parameter names based on ParameterIsRequiredFlag.
 
@@ -100,7 +167,7 @@ def list_required_parameters(context: dict) -> str:
         elif isinstance(flag, (int, bool)):
             if flag == 1 or flag is True:
                 required.append(name)
-    print(f"Required parameters: {", ".join(required)}")
+    print(f"Required parameters: {', '.join(required)}")
     return ", ".join(required)
 
 if __name__ == "__main__":
@@ -151,5 +218,14 @@ if __name__ == "__main__":
 
         # Ask large LLM to build BEA API params
         bea_params = build_bea_params_with_llm(question, context)
+
         bea_url = fetch_data_from_bea_api_url(bea_params)
-        print("Proposed BEA URL: " + bea_url)
+        print("Fetching from BEA URL: " + bea_url)
+        try:
+            fetch_data_from_bea_api(bea_params)
+        except Exception as e:
+            print(f"Error fetching data from BEA API: {e}")
+            print("Attempting to correct ...")
+            corrected = correct_bea_params_with_llm(str(e), question, context, bea_params)
+            bea_url = fetch_data_from_bea_api_url(corrected)
+            print("Fetching from Corrected BEA URL: " + bea_url)

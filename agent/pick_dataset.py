@@ -43,7 +43,7 @@ def smart_search(query: str):
 
 def print_datasets(datasets):
     for dataset in datasets:
-        print(f"Dataset: {dataset.get('dataset_name')}")
+        print(f"Dataset: {dataset.get('dataset_name')} (Confidence: {dataset.get('confidence','N/A')})")
         if 'table_name' in dataset:
             print(f"   Table: {dataset.get('table_name')}")
         print(f"   Description: {dataset.get('dataset_description')}")
@@ -94,7 +94,8 @@ Confidence (0-100):
         if score < 0: score = 0
         if score > 100: score = 100
         return score
-    except Exception:
+    except Exception as e:
+        print(f"LLM scoring failed: {e}")
         # Simple heuristic fallback
         heuristic = 0
         q_lower = question.lower()

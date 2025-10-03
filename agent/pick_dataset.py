@@ -1,4 +1,5 @@
-from llm import get_small_llm
+import json
+from llm import get_small_llm, get_medium_llm
 from database import hybrid_text_vector_search
 from embeddings import embed_query
 
@@ -190,3 +191,62 @@ def get_query_builder_context(dataset_name: str, table_name: str, full_datasets:
     result['Parameters'] = filtered_params
     result['SelectedTableName'] = table_name
     return result
+
+def choose_datasets_to_query(question: str, candidate_results: list, full_datasets: list, tie_threshold: int = 3):
+    """
+    Use the medium LLM to evaluate candidate datasets (and optionally a table) for suitability.
+    1. Build a rich context for each candidate via get_query_builder_context.
+    2. Ask medium LLM for a 0-100 relevance score (returning only integer); fallback heuristic if failure.
+    3. Pick the top dataset (highest score) and include any others within tie_threshold points.
+
+    Returns dict with keys:
+        top: the single top dataset (with score and context)
+        ties: list of additional near-tie datasets (excluding top)
+        all_scored: list of all datasets with scores
+    """
+    medium_llm = get_medium_llm()
+    scored = []
+    for ds in candidate_results:
+        ds_name = ds.get('dataset_name')
+        if not ds_name:
+            raise ValueError("Candidate result missing dataset_name")
+        try:
+            context_obj = get_query_builder_context(ds_name, ds.get('table_name', None), full_datasets, True)
+            context_data = json.dumps(context_obj, indent=2)
+        except Exception as e:
+            raise ValueError(f"Context build failed for {ds_name}: {e}")
+
+        # Build prompt
+        prompt = f"""
+You are ranking which dataset (and optional table) is best to answer a user question.
+Return ONLY an integer 0-100 (no text) indicating how suitable this dataset context is.
+Higher means more likely to directly provide an answer.
+
+Question: {question}
+Dataset Context (JSON-like): {context_data}
+
+Score (0-100):
+"""
+        resp = medium_llm.invoke(prompt)
+        content = getattr(resp, 'content', str(resp)).strip()
+        digits = ''.join(ch for ch in content if ch.isdigit())
+        score = int(digits[:3]) if digits else 0
+        if score > 100: score = 100
+
+        scored.append({
+            'dataset_name': ds_name,
+            'score': score,
+        })
+
+    if not scored:
+        return { 'top': None, 'ties': [], 'all_scored': [] }
+
+    scored.sort(key=lambda x: x['score'], reverse=True)
+    top = scored[0]
+    ties = [s for s in scored[1:] if (top['score'] - s['score']) <= tie_threshold]
+
+    return {
+        'top': top,
+        'ties': ties,
+        'all_scored': scored
+    }

@@ -1,5 +1,5 @@
 import json
-from llm import get_small_llm, get_medium_llm
+from llm import get_small_llm, get_medium_llm, get_large_llm
 from database import hybrid_text_vector_search
 from embeddings import embed_query
 
@@ -227,7 +227,22 @@ Dataset Context (JSON-like): {context_data}
 
 Score (0-100):
 """
-        resp = medium_llm.invoke(prompt)
+        try:
+            resp = medium_llm.invoke(prompt)
+        except Exception as e:
+            msg = str(e).lower()
+            if 'maximum context length' in msg or 'context_length' in msg or 'token' in msg and 'exceed' in msg:
+                print(f"Medium model context/token limit hit for {ds_name}; retrying with large model...")
+                try:
+                    large_llm = get_large_llm()
+                    resp = large_llm.invoke(prompt)
+                except Exception as e2:
+                    print(f"Large model fallback failed for {ds_name}: {e2}")
+                    continue
+            else:
+                print(f"Scoring failed for {ds_name}: {e}")
+                continue
+
         content = getattr(resp, 'content', str(resp)).strip()
         digits = ''.join(ch for ch in content if ch.isdigit())
         score = int(digits[:3]) if digits else 0

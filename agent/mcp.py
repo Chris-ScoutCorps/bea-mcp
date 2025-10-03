@@ -220,10 +220,35 @@ class BeaMcp:
             'bea_params': bea_params,
             'bea_url': bea_url,
         }
+        def _generate_answer(data_obj):
+            try:
+                llm = get_large_llm()
+                data_json = json.dumps(data_obj)
+                prompt = f"""
+You are an economic data assistant.
+
+Instructions:
+1. Provide a clear, plain-English answer grounded ONLY in the data sample.
+2. Cite specific figures with year/period if available.
+3. If data insufficient, state what's missing succinctly.
+4. Keep it under 8 sentences, no speculation.
+
+User question: {question}
+Data Returned from API: {data_json}
+Additional Context: {json.dumps(context)}
+
+Answer:
+"""
+                resp = llm.invoke(prompt)
+                return getattr(resp, 'content', str(resp)).strip()
+            except Exception as e:
+                return f"Answer generation failed: {e}" 
+
         try:
             data = fetch_data_from_bea_api(bea_params)
             result_payload['fetch_status'] = 'ok'
             result_payload['data_preview'] = data[:3] if isinstance(data, list) else data
+            result_payload['answer'] = _generate_answer(data)
         except Exception as e:
             result_payload['fetch_status'] = 'error'
             result_payload['error'] = str(e)
@@ -233,9 +258,9 @@ class BeaMcp:
                 data = fetch_data_from_bea_api(corrected)
                 result_payload['second_attempt_status'] = 'ok'
                 result_payload['data_preview'] = data[:3] if isinstance(data, list) else data
+                result_payload['answer'] = _generate_answer(data)
             except Exception as e2:
                 result_payload['second_attempt_status'] = 'error'
                 result_payload['second_error'] = str(e2)
 
-                
         return result_payload

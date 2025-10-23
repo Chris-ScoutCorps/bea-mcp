@@ -76,7 +76,8 @@ def main(argv=None):
     poetry_exe = shutil.which('poetry') or 'poetry'
     cmd = [poetry_exe, 'run', 'python', '-m', 'mcp_server']
     try:
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # Let server stderr pass through directly so we see progress
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None, text=True)
     except Exception as e:
         print(f"Failed to start server: {e}", file=sys.stderr)
         return 2
@@ -92,10 +93,7 @@ def main(argv=None):
     line = proc.stdout.readline()
     proc.terminate()
     if not line:
-        stderr_output = proc.stderr.read()
         print("No response from server.", file=sys.stderr)
-        if stderr_output:
-            print(f"Server stderr:\n{stderr_output}", file=sys.stderr)
         return 4
     line = line.strip()
     try:

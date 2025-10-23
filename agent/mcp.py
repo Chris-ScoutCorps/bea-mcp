@@ -168,20 +168,30 @@ def list_required_parameters(context: dict) -> str:
 
 
 class BeaMcp:
-    """Facade class for BEA MCP operations: dataset bootstrap + question answering pipeline."""
+    """Facade class for BEA MCP operations: dataset bootstrap + question answering pipeline.
 
-    def __init__(self):
-        # Bootstrap datasets (interactive refresh choice)
-        datasets = get_all_datasets()
-        dataset_count = len(datasets)
-        if dataset_count > 0:
-            response = input(f"There are {dataset_count} datasets already with metadata. Use this (default) or refresh? (use/refresh): ").strip().lower()
-            if response in ['refresh', 'r']:
-                print("Fetching fresh data from BEA API...")
-                datasets = fetch_and_upsert_bea_datasets()
-        else:
-            print("No existing datasets found. Fetching from BEA API...")
+    Startup refresh logic:
+      - If force_refresh=True OR no datasets exist, fetch fresh dataset metadata from BEA.
+      - Otherwise reuse existing stored datasets.
+    """
+
+    def __init__(self, force_refresh: bool | None = None):
+        # Determine refresh directive: explicit flag overrides env var; default False
+        if force_refresh is None:
+            import os
+            env_flag = os.getenv('BEA_FORCE_REFRESH', '').strip().lower()
+            force_refresh = env_flag in ('1', 'true', 'yes', 'y')
+
+        existing = get_all_datasets()
+        if force_refresh or not existing:
+            if force_refresh:
+                print("BEA_FORCE_REFRESH enabled: refreshing dataset metadata from BEA API...")
+            else:
+                print("No existing datasets found. Fetching dataset metadata from BEA API...")
             datasets = fetch_and_upsert_bea_datasets()
+        else:
+            print(f"Using cached dataset metadata ({len(existing)} datasets). Set BEA_FORCE_REFRESH=1 to refresh on next start.")
+            datasets = existing
 
         data_lookup = build_lookup_documents(datasets)
         refresh_data_lookup(data_lookup)

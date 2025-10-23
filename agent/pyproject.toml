@@ -16,6 +16,7 @@ langchain-openai = "*"
 flask = "*"
 debugpy = "*"
 pymongo = "*"
+pytest = "*"
 
 [build-system]
 requires = ["poetry-core"]

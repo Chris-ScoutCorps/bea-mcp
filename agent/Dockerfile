@@ -38,5 +38,5 @@ COPY . .
 EXPOSE 5000
 EXPOSE 5678
 
-# Default command: open a bash shell
-CMD ["/bin/bash"]
+# Default command: start MCP server
+CMD ["poetry", "run", "python", "-m", "agent.mcp_server"]

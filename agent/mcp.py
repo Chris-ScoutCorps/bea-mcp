@@ -9,7 +9,7 @@ from database import get_all_datasets, refresh_data_lookup
 from lookup import build_lookup_documents
 from pick_dataset import choose_datasets_to_query, get_query_builder_context, smart_search, score_and_select_top, print_datasets
 from llm import get_large_llm
-
+from logger import info
 
 def build_bea_params_with_llm(question: str, context: dict) -> dict:
     """Use the large LLM to propose BEA API params strictly from context."""
@@ -135,7 +135,7 @@ JSON:
             if rp not in revised:
                 missing.append(rp)
     if missing:
-        print(f"Warning: corrected params still missing required: {missing}")
+        info(f"Warning: corrected params still missing required: {missing}")
 
     # Normalize Year conflict
     if 'Year' in revised and ('FirstYear' in revised or 'LastYear' in revised):
@@ -164,7 +164,7 @@ def list_required_parameters(context: dict) -> str:
         elif isinstance(flag, (int, bool)):
             if flag == 1 or flag is True:
                 required.append(name)
-    print(f"Required parameters: {', '.join(required)}")
+    info(f"Required parameters: {', '.join(required)}")
     return ", ".join(required)
 
 
@@ -186,12 +186,12 @@ class BeaMcp:
         existing = get_all_datasets()
         if force_refresh or not existing:
             if force_refresh:
-                print("BEA_FORCE_REFRESH enabled: refreshing dataset metadata from BEA API...", file=sys.stderr)
+                info("BEA_FORCE_REFRESH enabled: refreshing dataset metadata from BEA API...")
             else:
-                print("No existing datasets found. Fetching dataset metadata from BEA API...", file=sys.stderr)
+                info("No existing datasets found. Fetching dataset metadata from BEA API...")
             datasets = fetch_and_upsert_bea_datasets()
         else:
-            print(f"Using cached dataset metadata ({len(existing)} datasets). Set BEA_FORCE_REFRESH=1 to refresh on next start.", file=sys.stderr)
+            info(f"Using cached dataset metadata ({len(existing)} datasets). Set BEA_FORCE_REFRESH=1 to refresh on next start.")
             datasets = existing
 
         data_lookup = build_lookup_documents(datasets)
@@ -206,13 +206,23 @@ class BeaMcp:
         Returns a dictionary with keys:
           question, top10, chosen, bea_params, bea_url, fetch_status, error (optional), corrected_params (optional)
         """
+
         results = smart_search(question)
         top10, _all_scored = score_and_select_top(question, results, top_n=10)
         if not top10:
             return { 'question': question, 'fetch_status': 'no_datasets' }
 
+        info("Top 10 candidate datasets/tables:")
+        for ds in top10:
+            # Create a copy without embedding and other_parameters for display
+            display_ds = {k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'other_parameters')}
+            info(display_ds)
+
         selection = choose_datasets_to_query(question, top10, self.datasets, tie_threshold=3)
         chosen = selection.get('top')
+
+        info(f"Chosen: {json.dumps(chosen, indent=2)}")
+
         context = get_query_builder_context(
             dataset_name=chosen.get('dataset_name'),
             table_name=chosen.get('table_name', None),

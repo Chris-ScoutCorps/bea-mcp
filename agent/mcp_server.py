@@ -16,6 +16,9 @@ Server runs until EOF on stdin or SIGINT/SIGTERM.
 
 from __future__ import annotations
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 import sys
 import json
 import signal
@@ -38,7 +41,7 @@ for sig in (signal.SIGINT, signal.SIGTERM):
     except Exception:
         pass
 
-# Redirect all print() calls to stderr during initialization to keep stdout clean for JSON-RPC
+# Redirect all info() calls to stderr during initialization to keep stdout clean for JSON-RPC
 _original_stdout = sys.stdout
 sys.stdout = sys.stderr
 

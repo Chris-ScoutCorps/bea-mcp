@@ -10,6 +10,7 @@ from pymongo.database import Database
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, OperationFailure
 
 from embeddings import embed_documents
+from logger import info
 
 class Collections(Enum):
     """Enum for MongoDB collection names"""
@@ -55,7 +56,7 @@ def ensure_database_exists() -> Database:
                 db.create_collection(temp_name)
             db[temp_name].drop()
     except Exception as e:
-        print(f"Warning: ensure_database_exists encountered error (non-fatal): {e}")
+        info(f"Warning: ensure_database_exists encountered error (non-fatal): {e}")
     return db
 
 def ensure_collection(name: str) -> Collection:
@@ -96,7 +97,7 @@ def upsert_dataset(dataset_name: str, dataset: Dict[str, str]) -> bool:
         )
         return True
     except Exception as e:
-        print(f"Error upserting dataset: {e}")
+        info(f"Error upserting dataset: {e}")
         return False
 
 def get_all_datasets() -> List[Dict[str, str]]:
@@ -112,7 +113,7 @@ def get_all_datasets() -> List[Dict[str, str]]:
         datasets = list(collection.find({}, {'_id': 0}))  # Exclude _id field
         return datasets
     except Exception as e:
-        print(f"Error retrieving datasets: {e}")
+        info(f"Error retrieving datasets: {e}")
         return []
 
 def refresh_data_lookup(documents: List[Dict]) -> bool:
@@ -127,26 +128,26 @@ def refresh_data_lookup(documents: List[Dict]) -> bool:
     """
     collection = ensure_collection(Collections.DATA_LOOKUP.value)
     result = collection.delete_many({})
-    print(f"Cleared {result.deleted_count} existing documents from data_lookup")
+    info(f"Cleared {result.deleted_count} existing documents from data_lookup")
     # If documents lack embeddings, attempt to embed them (best-effort)
     if documents and "embedding" not in documents[0]:
         try:
             documents = embed_documents(documents)
-            print("Embeddings generated for documents.")
+            info("Embeddings generated for documents.")
         except Exception as e:
-            print(f"Warning: could not embed documents automatically: {e}")
+            info(f"Warning: could not embed documents automatically: {e}")
     result = collection.insert_many(documents)
-    print(f"Inserted {len(result.inserted_ids)} new documents into data_lookup")
+    info(f"Inserted {len(result.inserted_ids)} new documents into data_lookup")
     # Attempt to (re)create vector search index (Atlas / Atlas Local only)
     try:
         create_vector_search_index()
     except Exception as e:
-        print(f"Warning: could not create vector search index: {e}")
+        info(f"Warning: could not create vector search index: {e}")
     # Ensure weighted legacy text index (always available)
     try:
         ensure_text_index()
     except Exception as e:
-        print(f"Warning: could not create text index: {e}")
+        info(f"Warning: could not create text index: {e}")
     return True
 
 def create_vector_search_index(
@@ -216,20 +217,20 @@ def create_vector_search_index(
     try:
         result = db.command(cmd)
         if result.get("ok") == 1:
-            print(f"Vector search index '{index_name}' ensured on collection '{collection_name}'.")
+            info(f"Vector search index '{index_name}' ensured on collection '{collection_name}'.")
             return True
-        print(f"Unexpected response creating search index '{index_name}': {result}")
+        info(f"Unexpected response creating search index '{index_name}': {result}")
         return False
     except OperationFailure as oe:
         # Provide clearer guidance if common field type error occurs
         msg = str(oe)
         if "must be one of" in msg and "knnVector" not in msg:
-            print("Atlas Search mapping error did not list 'knnVector'; available types changed? Message:", msg)
+            info("Atlas Search mapping error did not list 'knnVector'; available types changed? Message:", msg)
         else:
-            print(f"OperationFailure creating search index '{index_name}': {oe}")
+            info(f"OperationFailure creating search index '{index_name}': {oe}")
         return False
     except Exception as e:
-        print(f"Error creating search index '{index_name}': {e}")
+        info(f"Error creating search index '{index_name}': {e}")
         return False
 
 def vector_search(
@@ -284,9 +285,9 @@ def vector_search(
             try:
                 return list(db[collection_name].aggregate(pipeline_knn))
             except OperationFailure as oe2:
-                print(f"Vector search fallback (knnBeta) failed: {oe2}")
+                info(f"Vector search fallback (knnBeta) failed: {oe2}")
                 return []
-        print(f"Vector search failed: {oe}")
+        info(f"Vector search failed: {oe}")
         return []
 
 def detect_vector_capability() -> Dict[str, bool]:
@@ -323,7 +324,7 @@ def detect_vector_capability() -> Dict[str, bool]:
             flags["knnBeta"] = True
     except Exception:
         pass
-    print(f"Vector capability detection: {flags}")
+    info(f"Vector capability detection: {flags}")
     return flags
 
 def ensure_text_index(
@@ -365,10 +366,10 @@ def ensure_text_index(
         # Build a single compound text index over all weighted fields.
         index_spec = [(field, "text") for field in weights.keys()]
         coll.create_index(index_spec, name=index_name, default_language="english", weights=weights)
-        print(f"Text index '{index_name}' ensured with weights: {weights}")
+        info(f"Text index '{index_name}' ensured with weights: {weights}")
         return True
     except Exception as e:
-        print(f"Failed to create text index '{index_name}': {e}")
+        info(f"Failed to create text index '{index_name}': {e}")
         return False
 
 def hybrid_text_vector_search(
@@ -450,7 +451,7 @@ def hybrid_text_vector_search(
             # Fall back to sequential approach
             pass
         except Exception as e:
-            print(f"Hybrid compound search error, falling back sequential: {e}")
+            info(f"Hybrid compound search error, falling back sequential: {e}")
 
     # Sequential fallback logic
     vector_results: List[Dict[str, Any]] = []

@@ -3,6 +3,7 @@ import copy
 from llm import get_small_llm, get_medium_llm, get_large_llm
 from database import hybrid_text_vector_search
 from embeddings import embed_query
+from logger import info
 
 def smart_search(query: str):
     """Perform search following this method:
@@ -44,13 +45,13 @@ def smart_search(query: str):
 
 def print_datasets(datasets):
     for dataset in datasets:
-        print(f"Dataset: {dataset.get('dataset_name')} (Confidence: {dataset.get('confidence','N/A')})")
+        info(f"Dataset: {dataset.get('dataset_name')} (Confidence: {dataset.get('confidence','N/A')})")
         if 'table_name' in dataset:
-            print(f"   Table: {dataset.get('table_name')}")
-        print(f"   Description: {dataset.get('dataset_description')}")
+            info(f"   Table: {dataset.get('table_name')}")
+        info(f"   Description: {dataset.get('dataset_description')}")
         if 'table_description' in dataset:
-            print(f"   Table Description: {dataset.get('table_description')}")
-    print(f"-----------------")
+            info(f"   Table Description: {dataset.get('table_description')}")
+    info(f"-----------------")
 
 def score_dataset_relevance(question: str, dataset: dict, llm=None) -> int:
     """Ask a small LLM to rate confidence (0-100) that this dataset/table can answer the question.
@@ -96,7 +97,7 @@ Confidence (0-100):
         if score > 100: score = 100
         return score
     except Exception as e:
-        print(f"LLM scoring failed: {e}")
+        info(f"LLM scoring failed: {e}")
         # Simple heuristic fallback
         heuristic = 0
         q_lower = question.lower()
@@ -239,15 +240,15 @@ Score (0-100):
         except Exception as e:
             msg = str(e).lower()
             if 'maximum context length' in msg or 'context_length' in msg or 'token' in msg and 'exceed' in msg:
-                print(f"Medium model context/token limit hit for {ds_name}; retrying with large model...")
+                info(f"Medium model context/token limit hit for {ds_name}; retrying with large model...")
                 try:
                     large_llm = get_large_llm()
                     resp = large_llm.invoke(prompt)
                 except Exception as e2:
-                    print(f"Large model fallback failed for {ds_name}: {e2}")
+                    info(f"Large model fallback failed for {ds_name}: {e2}")
                     continue
             else:
-                print(f"Scoring failed for {ds_name}: {e}")
+                info(f"Scoring failed for {ds_name}: {e}")
                 continue
 
         content = getattr(resp, 'content', str(resp)).strip()

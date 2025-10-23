@@ -19,6 +19,7 @@ import itertools
 import subprocess
 import shutil
 
+from logger import info
 
 _id_counter = itertools.count(1)
 
@@ -63,15 +64,15 @@ def _format_result(obj: dict) -> str:
 def main(argv=None):
     argv = argv or sys.argv[1:]
     if not argv:
-        print("Provide a question string.", file=sys.stderr)
+        info("Provide a question string.")
         return 1
     question = " ".join(argv).strip()
     if not question:
-        print("Empty question.", file=sys.stderr)
+        info("Empty question.")
         return 1
 
     req = build_request(question)
-    print(json.dumps(req))  # raw request
+    info(json.dumps(req))  # raw request
 
     poetry_exe = shutil.which('poetry') or 'poetry'
     cmd = [poetry_exe, 'run', 'python', '-m', 'mcp_server']
@@ -79,29 +80,29 @@ def main(argv=None):
         # Let server stderr pass through directly so we see progress
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None, text=True)
     except Exception as e:
-        print(f"Failed to start server: {e}", file=sys.stderr)
+        info(f"Failed to start server: {e}")
         return 2
 
     try:
         proc.stdin.write(json.dumps(req) + '\n')
         proc.stdin.flush()
     except Exception as e:
-        print(f"Failed to send request: {e}", file=sys.stderr)
+        info(f"Failed to send request: {e}")
         proc.kill()
         return 3
 
     line = proc.stdout.readline()
     proc.terminate()
     if not line:
-        print("No response from server.", file=sys.stderr)
+        info("No response from server.")
         return 4
     line = line.strip()
     try:
         resp = json.loads(line)
     except Exception as e:
-        print(f"Malformed response JSON: {e}\nRaw: {line}", file=sys.stderr)
+        info(f"Malformed response JSON: {e}\nRaw: {line}")
         return 5
-    print(_format_result(resp))
+    info(_format_result(resp))
     return 0
 
 

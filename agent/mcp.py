@@ -223,6 +223,10 @@ class BeaMcp:
 
         info(f"Chosen: {json.dumps(chosen, indent=2)}")
 
+        # Remove _id from chosen and top10 before including in result to avoid ObjectId serialization errors
+        chosen_clean = {k: v for k, v in chosen.items() if k not in ('_id', 'embedding', 'other_parameters')}
+        top10_clean = [{k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'other_parameters')} for ds in top10]
+
         context = get_query_builder_context(
             dataset_name=chosen.get('dataset_name'),
             table_name=chosen.get('table_name', None),
@@ -235,8 +239,8 @@ class BeaMcp:
 
         result_payload = {
             'question': question,
-            'top10': top10,
-            'chosen': chosen,
+            'top10': top10_clean,
+            'chosen': chosen_clean,
             'context': context,
             'bea_params': bea_params,
             'bea_url': bea_url,

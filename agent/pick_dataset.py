@@ -73,6 +73,9 @@ def score_dataset_relevance(question: str, dataset: dict, llm=None) -> int:
 You are a data relevance assessor. A user asks a question and you have a dataset (and maybe a table) description plus other parameter metadata.
 Rate your confidence that querying this dataset/table will help answer the user's question.
 Consider parameter names/descriptions if they are indicative of relevant dimensions or measures.
+
+Note that 'Standard NIPA tables' is the main data set - if there's not a reason to pick another, prefer NIPA.
+
 Return ONLY an integer 0-100. No words, no percent sign.
 
 Question: {question}

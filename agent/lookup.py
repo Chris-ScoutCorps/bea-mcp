@@ -1,5 +1,7 @@
 from typing import List, Dict, Any
 
+from logger import info
+
 def build_lookup_documents(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Generate documents for each table in datasets that have TableName parameters.
@@ -61,7 +63,7 @@ def build_lookup_documents(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any
                     document['other_parameters'].append(param_info)
                 
                 documents.append(document)
-                print(f"Created document for table '{table_name}' in dataset '{dataset_name}'")
+                info(f"Created document for table '{table_name}' in dataset '{dataset_name}'")
         else:
             # No TableName parameter, create one entry for the dataset
             document = {
@@ -79,7 +81,7 @@ def build_lookup_documents(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any
                 document['other_parameters'].append(param_info)
             
             documents.append(document)
-            print(f"Created document for dataset '{dataset_name}' (no tables)")
+            info(f"Created document for dataset '{dataset_name}' (no tables)")
     
-    print(f"Generated {len(documents)} table documents from {len(datasets)} datasets")
+    info(f"Generated {len(documents)} table documents from {len(datasets)} datasets")
     return documents

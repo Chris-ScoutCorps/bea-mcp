@@ -38,5 +38,6 @@ COPY . .
 EXPOSE 5000
 EXPOSE 5678
 
-# Default command: open a bash shell
+# Default command: start MCP server (module lives at top-level because agent/ is mounted as /app)
+#CMD ["poetry", "run", "python", "mcp_server.py"]
 CMD ["/bin/bash"]

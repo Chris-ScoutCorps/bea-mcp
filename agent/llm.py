@@ -1,4 +1,8 @@
+import warnings
 from langchain_community.chat_models import ChatOpenAI
+
+# Suppress LangChain deprecation warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def get_small_llm():
     return ChatOpenAI(model="gpt-3.5-turbo", temperature=0)

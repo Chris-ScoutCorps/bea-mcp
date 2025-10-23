@@ -2,13 +2,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import json
+import sys
 
 from api import fetch_and_upsert_bea_datasets, fetch_data_from_bea_api, fetch_data_from_bea_api_url
 from database import get_all_datasets, refresh_data_lookup
 from lookup import build_lookup_documents
 from pick_dataset import choose_datasets_to_query, get_query_builder_context, smart_search, score_and_select_top, print_datasets
 from llm import get_large_llm
-
+from logger import info
 
 def build_bea_params_with_llm(question: str, context: dict) -> dict:
     """Use the large LLM to propose BEA API params strictly from context."""
@@ -134,7 +135,7 @@ JSON:
             if rp not in revised:
                 missing.append(rp)
     if missing:
-        print(f"Warning: corrected params still missing required: {missing}")
+        info(f"Warning: corrected params still missing required: {missing}")
 
     # Normalize Year conflict
     if 'Year' in revised and ('FirstYear' in revised or 'LastYear' in revised):
@@ -163,25 +164,35 @@ def list_required_parameters(context: dict) -> str:
         elif isinstance(flag, (int, bool)):
             if flag == 1 or flag is True:
                 required.append(name)
-    print(f"Required parameters: {', '.join(required)}")
+    info(f"Required parameters: {', '.join(required)}")
     return ", ".join(required)
 
 
 class BeaMcp:
-    """Facade class for BEA MCP operations: dataset bootstrap + question answering pipeline."""
+    """Facade class for BEA MCP operations: dataset bootstrap + question answering pipeline.
 
-    def __init__(self):
-        # Bootstrap datasets (interactive refresh choice)
-        datasets = get_all_datasets()
-        dataset_count = len(datasets)
-        if dataset_count > 0:
-            response = input(f"There are {dataset_count} datasets already with metadata. Use this (default) or refresh? (use/refresh): ").strip().lower()
-            if response in ['refresh', 'r']:
-                print("Fetching fresh data from BEA API...")
-                datasets = fetch_and_upsert_bea_datasets()
-        else:
-            print("No existing datasets found. Fetching from BEA API...")
+    Startup refresh logic:
+      - If force_refresh=True OR no datasets exist, fetch fresh dataset metadata from BEA.
+      - Otherwise reuse existing stored datasets.
+    """
+
+    def __init__(self, force_refresh: bool | None = None):
+        # Determine refresh directive: explicit flag overrides env var; default False
+        if force_refresh is None:
+            import os
+            env_flag = os.getenv('BEA_FORCE_REFRESH', '').strip().lower()
+            force_refresh = env_flag in ('1', 'true', 'yes', 'y')
+
+        existing = get_all_datasets()
+        if force_refresh or not existing:
+            if force_refresh:
+                info("BEA_FORCE_REFRESH enabled: refreshing dataset metadata from BEA API...")
+            else:
+                info("No existing datasets found. Fetching dataset metadata from BEA API...")
             datasets = fetch_and_upsert_bea_datasets()
+        else:
+            info(f"Using cached dataset metadata ({len(existing)} datasets). Set BEA_FORCE_REFRESH=1 to refresh on next start.")
+            datasets = existing
 
         data_lookup = build_lookup_documents(datasets)
         refresh_data_lookup(data_lookup)
@@ -195,13 +206,27 @@ class BeaMcp:
         Returns a dictionary with keys:
           question, top10, chosen, bea_params, bea_url, fetch_status, error (optional), corrected_params (optional)
         """
+
         results = smart_search(question)
         top10, _all_scored = score_and_select_top(question, results, top_n=10)
         if not top10:
             return { 'question': question, 'fetch_status': 'no_datasets' }
 
+        info("Top 10 candidate datasets/tables:")
+        for ds in top10:
+            # Create a copy without embedding and other_parameters for display
+            display_ds = {k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'other_parameters')}
+            info(display_ds)
+
         selection = choose_datasets_to_query(question, top10, self.datasets, tie_threshold=3)
         chosen = selection.get('top')
+
+        info(f"Chosen: {json.dumps(chosen, indent=2)}")
+
+        # Remove _id from chosen and top10 before including in result to avoid ObjectId serialization errors
+        chosen_clean = {k: v for k, v in chosen.items() if k not in ('_id', 'embedding', 'other_parameters')}
+        top10_clean = [{k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'other_parameters')} for ds in top10]
+
         context = get_query_builder_context(
             dataset_name=chosen.get('dataset_name'),
             table_name=chosen.get('table_name', None),
@@ -214,8 +239,8 @@ class BeaMcp:
 
         result_payload = {
             'question': question,
-            'top10': top10,
-            'chosen': chosen,
+            'top10': top10_clean,
+            'chosen': chosen_clean,
             'context': context,
             'bea_params': bea_params,
             'bea_url': bea_url,

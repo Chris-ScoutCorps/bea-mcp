@@ -1,35 +1,16 @@
 version: "4.37.1"
 
 services:
-  agent:
-    build:
-      context: ./agent
-      dockerfile: Dockerfile
-    environment:
-      # Include database name and authSource; adjust if you disable auth.
-      MONGO_URI: mongodb://root:example@atlas:27017/?authSource=admin
-    depends_on:
-      atlas:
-        condition: service_healthy
-    volumes:
-      - ./agent:/app
-    ports:
-      - "5000:5000"
-      - "5678:5678"
-    stdin_open: true
-    tty: true
-
   atlas:
     image: mongodb/mongodb-atlas-local:7.0.1-20251002T100511Z
     container_name: bea-atlas
-    #restart: unless-stopped
     environment:
       MONGODB_INITDB_ROOT_USERNAME: root
       MONGODB_INITDB_ROOT_PASSWORD: example
       MONGODB_INITDB_DATABASE: BEA
-      DO_NOT_TRACK: "1"  # Opt-out of telemetry (set to 0 or remove to enable)
+      DO_NOT_TRACK: "1"
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep 1 || exit 1"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -38,19 +19,36 @@ services:
       - "27017:27017"
     volumes:
       - atlas_data:/data/db
+      - atlas_configdb:/data/configdb
 
-  # mongo:
-  #   image: mongodb/mongodb-community-server:8.2.0-ubi8
-  #   container_name: bea-mongo
-  #   #restart: unless-stopped
-  #   environment:
-  #     MONGO_INITDB_ROOT_USERNAME: root
-  #     MONGO_INITDB_ROOT_PASSWORD: example
-  #   ports:
-  #     - "27017:27017"
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    environment:
+      MONGO_URI: mongodb://root:example@atlas:27017/BEA?authSource=admin&directConnection=true&readConcernLevel=local
+    depends_on:
+      atlas:
+        condition: service_healthy
+      #atlas-rs-init:
+      #  condition: service_completed_successfully
+    command: ["poetry", "run", "python", "mcp_server.py"]
+    volumes:
+      - ./agent:/app
+    ports:
+      - "5000:5000"
+      - "5678:5678"
+    stdin_open: true
+    tty: true
+
+  # atlas-keyfile-init:
+  #   image: busybox:latest
+  #   container_name: bea-atlas-keyfile-init
   #   volumes:
-  #     - mongo_data:/data/db
+  #     - atlas_configdb:/data/configdb
+  #   command: /bin/sh -c "set -e; mkdir -p /data/configdb; if [ ! -f /data/configdb/keyfile ]; then head -c 512 /dev/urandom | base64 > /data/configdb/keyfile; chmod 400 /data/configdb/keyfile; fi"
+  #   restart: "no"
 
 volumes:
-  mongo_data:
   atlas_data:
+  atlas_configdb:

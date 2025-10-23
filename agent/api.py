@@ -6,6 +6,7 @@ import json
 import requests
 from typing import Dict, List, Optional
 from database import upsert_dataset
+from logger import info
 
 def build_bea_api_url(method: str, params: Optional[Dict[str, str]] = None) -> str:
     """Build the BEA API URL"""
@@ -27,14 +28,14 @@ def build_bea_api_url(method: str, params: Optional[Dict[str, str]] = None) -> s
 def fetch_from_bea_api(method: str, itemname: str, params: Optional[Dict[str, str]] = None) -> Dict:
     """Fetch data from BEA API for a given method and parameters"""
     def _fetch():
-        print(f"Fetching data for method: {method} with params: {params}")
+        info(f"Fetching data for method: {method} with params: {params}")
         url = build_bea_api_url(method, params)
         try:
             response = requests.get(url)
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
-            print(f"API request failed: {e}")
+            info(f"API request failed: {e}")
             return {"error": str(e)}
     
     data = _fetch()
@@ -87,19 +88,19 @@ def fetch_and_upsert_bea_datasets() -> Dict[str, int]:
                                 "ParameterName": parameter_name
                             })
                             parameter['Values'] = parameter_values
-                            print(f"Fetched {len(parameter_values)} values for parameter {parameter_name} in dataset {dataset_name}")
+                            info(f"Fetched {len(parameter_values)} values for parameter {parameter_name} in dataset {dataset_name}")
                         except Exception as e:
-                            print(f"Failed to fetch values for parameter {parameter_name} in dataset {dataset_name}: {e}")
+                            info(f"Failed to fetch values for parameter {parameter_name} in dataset {dataset_name}: {e}")
                             parameter['Values'] = []
                 
                 dataset['Parameters'] = parameters
 
             upsert_dataset(dataset_name, dataset)
 
-        print(f"Found {len(datasets)} data sets")
+        info(f"Found {len(datasets)} data sets")
         return datasets
         
     except Exception as e:
-        print(f"Error processing datasets: {e}")
+        info(f"Error processing datasets: {e}")
         return {'error': str(e)}
 

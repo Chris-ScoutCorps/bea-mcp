@@ -5,6 +5,7 @@ load_dotenv()
 import json
 
 from mcp import BeaMcp
+from logger import info
 
 if __name__ == "__main__":
     mcp = BeaMcp()
@@ -15,5 +16,5 @@ if __name__ == "__main__":
             break
 
         result = mcp.ask(question)
-        print(json.dumps(result['bea_url'], indent=2))
-        print(result['answer'])
+        info(json.dumps(result['bea_url'], indent=2))
+        info(result['answer'])

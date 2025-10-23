@@ -38,8 +38,14 @@ for sig in (signal.SIGINT, signal.SIGTERM):
     except Exception:
         pass
 
+# Redirect all print() calls to stderr during initialization to keep stdout clean for JSON-RPC
+_original_stdout = sys.stdout
+sys.stdout = sys.stderr
 
 bea = BeaMcp()  # respects BEA_FORCE_REFRESH env variable
+
+# Restore stdout for JSON-RPC responses
+sys.stdout = _original_stdout
 
 
 def json_response(id_: Any, result: Any = None, error: Dict[str, Any] | None = None):

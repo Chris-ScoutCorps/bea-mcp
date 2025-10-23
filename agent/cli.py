@@ -6,7 +6,7 @@ Usage:
 Steps performed:
     1. Build JSON-RPC request for ask_bea.
     2. Print the request (raw JSON).
-    3. Start server subprocess (agent.mcp_server).
+    3. Start server subprocess (mcp_server).
     4. Send request, read one response line.
     5. Print formatted result.
 """
@@ -74,7 +74,7 @@ def main(argv=None):
     print(json.dumps(req))  # raw request
 
     poetry_exe = shutil.which('poetry') or 'poetry'
-    cmd = [poetry_exe, 'run', 'python', '-m', 'agent.mcp_server']
+    cmd = [poetry_exe, 'run', 'python', '-m', 'mcp_server']
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     except Exception as e:
@@ -92,7 +92,10 @@ def main(argv=None):
     line = proc.stdout.readline()
     proc.terminate()
     if not line:
+        stderr_output = proc.stderr.read()
         print("No response from server.", file=sys.stderr)
+        if stderr_output:
+            print(f"Server stderr:\n{stderr_output}", file=sys.stderr)
         return 4
     line = line.strip()
     try:

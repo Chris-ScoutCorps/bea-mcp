@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import json
+import sys
 
 from api import fetch_and_upsert_bea_datasets, fetch_data_from_bea_api, fetch_data_from_bea_api_url
 from database import get_all_datasets, refresh_data_lookup
@@ -185,12 +186,12 @@ class BeaMcp:
         existing = get_all_datasets()
         if force_refresh or not existing:
             if force_refresh:
-                print("BEA_FORCE_REFRESH enabled: refreshing dataset metadata from BEA API...")
+                print("BEA_FORCE_REFRESH enabled: refreshing dataset metadata from BEA API...", file=sys.stderr)
             else:
-                print("No existing datasets found. Fetching dataset metadata from BEA API...")
+                print("No existing datasets found. Fetching dataset metadata from BEA API...", file=sys.stderr)
             datasets = fetch_and_upsert_bea_datasets()
         else:
-            print(f"Using cached dataset metadata ({len(existing)} datasets). Set BEA_FORCE_REFRESH=1 to refresh on next start.")
+            print(f"Using cached dataset metadata ({len(existing)} datasets). Set BEA_FORCE_REFRESH=1 to refresh on next start.", file=sys.stderr)
             datasets = existing
 
         data_lookup = build_lookup_documents(datasets)

@@ -26,11 +26,11 @@ If no datasets stored, it automatically fetches them.
 
 ### Running the Server
 
-poetry run python -m agent.mcp_server
+poetry run python -m mcp_server
 
 Or with refresh:
 
-BEA_FORCE_REFRESH=1 poetry run python -m agent.mcp_server
+BEA_FORCE_REFRESH=1 poetry run python -m mcp_server
 
 ### JSON-RPC Examples
 

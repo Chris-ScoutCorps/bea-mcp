@@ -116,6 +116,22 @@ def get_all_datasets() -> List[Dict[str, str]]:
         info(f"Error retrieving datasets: {e}")
         return []
 
+def list_datasets_descriptions() -> List[str]:
+    """
+    Get a simplified list of datasets with name and description.
+    
+    Returns:
+        List of dicts with DatasetName and DatasetDescription
+    """
+    collection = ensure_collection(Collections.DATASETS.value)
+    
+    try:
+        datasets = list(collection.find({}, {'_id': 0, 'DatasetDescription': 1}))
+        return [dataset['DatasetDescription'] for dataset in datasets]
+    except Exception as e:
+        info(f"Error listing datasets: {e}")
+        return []
+
 def refresh_data_lookup(documents: List[Dict]) -> bool:
     """
     Clear the data_lookup collection and insert new documents.

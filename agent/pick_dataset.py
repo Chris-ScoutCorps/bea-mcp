@@ -1,7 +1,7 @@
 import json
 import copy
 from llm import get_small_llm, get_medium_llm, get_large_llm
-from database import hybrid_text_vector_search
+from database import hybrid_text_vector_search, list_datasets_descriptions
 from embeddings import embed_query
 from logger import info
 
@@ -74,7 +74,8 @@ You are a data relevance assessor. A user asks a question and you have a dataset
 Rate your confidence that querying this dataset/table will help answer the user's question.
 Consider parameter names/descriptions if they are indicative of relevant dimensions or measures.
 
-Note that 'Standard NIPA tables' is the main data set - if there's not a reason to pick another, prefer NIPA.
+Note that 'Standard NIPA tables' is the main data set - if there's not a reason to pick another, prefer NIPA. Consider going outside of NIPA for the following topics:
+{"\n".join([f"- {d}" for d in list_datasets_descriptions() if " NIPA " not in f" {d} "])}
 
 Return ONLY an integer 0-100. No words, no percent sign.
 

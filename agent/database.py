@@ -32,12 +32,35 @@ def get_mongo_client() -> MongoClient:
         raise ConnectionError(f"Failed to connect to MongoDB: {e}")
 
 def get_database() -> Database:
-    """Get the database from MongoDB client"""
-    return get_mongo_client()['BEA']
+    """Return a handle to the configured database (created lazily on first write).
+
+    Uses env var MONGO_DB (default 'BEA'). MongoDB creates a database implicitly when a
+    collection is first written to; no explicit 'create database' command exists.
+    """
+    db_name = os.getenv('MONGO_DB', 'BEA')
+    client = get_mongo_client()
+    return client[db_name]
+
+def ensure_database_exists() -> Database:
+    """Force creation of the database by creating a lightweight marker collection if empty.
+
+    If the database has zero collections we create a temporary 'db_init_marker' collection
+    (if not present) and immediately drop it. This guarantees the database files exist.
+    """
+    db = get_database()
+    try:
+        if not db.list_collection_names():
+            temp_name = 'db_init_marker'
+            if temp_name not in db.list_collection_names():
+                db.create_collection(temp_name)
+            db[temp_name].drop()
+    except Exception as e:
+        print(f"Warning: ensure_database_exists encountered error (non-fatal): {e}")
+    return db
 
 def ensure_collection(name: str) -> Collection:
-    """Ensure the collection exists in the database"""
-    db = get_database()
+    """Ensure the collection exists in the database (creating database implicitly if needed)."""
+    db = ensure_database_exists()
     
     # Check if collection exists
     if name not in db.list_collection_names():

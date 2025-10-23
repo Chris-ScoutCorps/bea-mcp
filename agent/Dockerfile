@@ -40,3 +40,4 @@ EXPOSE 5678
 
 # Default command: start MCP server
 CMD ["poetry", "run", "python", "-m", "agent.mcp_server"]
+#CMD ["/bin/bash"]

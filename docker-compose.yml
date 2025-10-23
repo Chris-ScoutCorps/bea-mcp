@@ -38,6 +38,16 @@ services:
       - "27017:27017"
     volumes:
       - atlas_data:/data/db
+      - atlas_configdb:/data/configdb
+
+  atlas-keyfile-init:
+    image: busybox:latest
+    container_name: bea-atlas-keyfile-init
+    volumes:
+      - atlas_configdb:/data/configdb
+    command: /bin/sh -c "set -e; mkdir -p /data/configdb; if [ ! -f /data/configdb/keyfile ]; then head -c 512 /dev/urandom | base64 > /data/configdb/keyfile; chmod 400 /data/configdb/keyfile; fi"
+    restart: "no"
+
 
   # mongo:
   #   image: mongodb/mongodb-community-server:8.2.0-ubi8
@@ -54,3 +64,4 @@ services:
 volumes:
   mongo_data:
   atlas_data:
+  atlas_configdb:

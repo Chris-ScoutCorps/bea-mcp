@@ -2,8 +2,23 @@
 
 ### TODOs
 
-The most important action item, IMO, is to preprocess the metadata along with human readble explanations and clear keywords, to help it find the right data set.
+The most important action item, IMO, is to pre-process the metadata along with human readble explanations and clear keywords, to help it find the right data set.
+- Come up with natural language summaries of data sets, vector embed them, and use these to relate data sets to questions
+- Generate sample questions for data sets, vector embed them, and use these to relate data sets to questions
+- Generate topics and synonyms for data sets, vector embed them. Do the same for questions that are asked by the user, and use these to relate data sets to questions
+
 The second most important is going to be for it to more cleverly determine whether the question applies to more than one data set.
+- See third bullet point above for deciding on correct data sets
+- Implement querying against multiple data sets and then stitch together results for a coherent response
+
+As this is an MCP server, we should return raw data sets and let a downstream consumer turn these into charts or graphs
+- If we want to incorproate it into a BQ DCS/DUP project
+- If it's meant to be standalone, we can do some of that here
+
+Smaller Action Items / Enhacements:
+- Using the LLM to match regions with a giant list to get a region code is overkill. We should have the LLM decide whether or not the query is regional, and then use more straightforward code to find the correct region.
+- We can probably do something similar with NAICS codes.
+- Expect more like this ...
 
 ## MCP Server
 
@@ -61,6 +76,15 @@ Read resource:
 }
 
 On initial parameter failure, fields: error, corrected_params, second_attempt_status may appear.
+
+### Simplified Interface
+
+```
+python cli.py "What was the change in US gross domestic product over the past decade?"
+python cli.py "What can you tell me about median salaries for workers in IT in California?"
+```
+
+Starts the MCP server, wraps the question in a proper jsonrpc, asks it, prints the result, and dhists the server down.
 
 ### Development Notes
 

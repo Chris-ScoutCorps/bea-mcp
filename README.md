@@ -1,6 +1,29 @@
 # bea-mcp
 
-### TODOs
+## MCP Server
+
+This project exposes a minimal Model Context Protocol style JSON-RPC server over stdio for answering economics questions via BEA datasets.
+
+Tools provided:
+  ask_bea(question: string) -> structured answer payload including chosen dataset/table, BEA API params, URL, and generated natural language answer.
+  get_all_datasets() -> list of all available BEA datasets with metadata
+  get_tables_for_dataset(dataset_name: string) -> list of tables for a specific dataset
+  fetch_data_from_bea_api(params: object) -> raw data from BEA API with custom parameters
+
+Resources:
+  dataset://<DatasetName>            - dataset metadata & parameter definitions
+  dataset://<DatasetName>#<TableName> - dataset + specific table context (if table selected)
+
+### Development Status
+
+- The "basic" tools, get_all_datasets, get_tables_for_dataset, and fetch_data_from_bea_api should behave deterministically and are essentially complete
+- The "advanced" tool uses those three (with a bunch of keyword and vector search functionality and LLM agents) to attempt to answer natural language questions using data from the BEA's API
+  - It's not deterministic
+  - It is NOT done, but rather should be considered a demonstration of an end-to-end workflow
+  - It completes the assignment in that it reads the question, picks a dataset, forms a request, and interpret the results
+  - It frequently picks the wrong dataset, though. Most of the TODO's below pertain to improving that.
+
+### TODOs for ask_bea
 
 The most important action item, IMO, is to pre-process the metadata along with human readble explanations and clear keywords, to help it find the right data set.
 - Come up with natural language summaries of data sets, vector embed them, and use these to relate data sets to questions
@@ -20,16 +43,6 @@ Smaller Action Items / Enhacements:
 - We can probably do something similar with NAICS codes.
 - Expect more like this ...
 
-## MCP Server
-
-This project exposes a minimal Model Context Protocol style JSON-RPC server over stdio for answering economics questions via BEA datasets.
-
-Single tool provided:
-  ask_bea(question: string) -> structured answer payload including chosen dataset/table, BEA API params, URL, and generated natural language answer.
-
-Resources:
-  dataset://<DatasetName>            - dataset metadata & parameter definitions
-  dataset://<DatasetName>#<TableName> - dataset + specific table context (if table selected)
 
 ### Startup Refresh Logic
 
@@ -55,11 +68,20 @@ List tools request:
 Call ask_bea:
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ask_bea","params":{"question":"What was US GDP growth in 2023?"}}}
 
+Get all datasets:
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_all_datasets","params":{}}}
+
+Get tables for a dataset:
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_tables_for_dataset","params":{"dataset_name":"NIPA"}}}
+
+Fetch data from BEA API:
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"fetch_data_from_bea_api","params":{"params":{"DatasetName":"NIPA","TableName":"T10101","Year":"2023","Frequency":"A"}}}}
+
 List resources:
-{"jsonrpc":"2.0","id":3,"method":"resources/list"}
+{"jsonrpc":"2.0","id":6,"method":"resources/list"}
 
 Read resource:
-{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"dataset://NIPA"}}
+{"jsonrpc":"2.0","id":7,"method":"resources/read","params":{"uri":"dataset://NIPA"}}
 
 ### Response Shape (ask_bea)
 

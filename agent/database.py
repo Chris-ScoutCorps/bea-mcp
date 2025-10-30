@@ -116,6 +116,22 @@ def get_all_datasets() -> List[Dict[str, str]]:
         info(f"Error retrieving datasets: {e}")
         return []
 
+def get_tables_for_dataset(dataset_name: str) -> List[Dict[str, str]]:
+    """
+    Get all tables for a specific dataset from the database.
+
+    Returns:
+        List of dictionaries containing table information
+    """
+    collection = ensure_collection(Collections.DATA_LOOKUP.value)
+
+    try:
+        tables = list(collection.find({ 'dataset_name': dataset_name }, {'_id': 0, 'embedding': 0}))  # Exclude _id field
+        return tables
+    except Exception as e:
+        info(f"Error retrieving tables: {e}")
+        return []
+
 def list_datasets_descriptions() -> List[str]:
     """
     Get a simplified list of datasets with name and description.

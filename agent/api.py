@@ -30,6 +30,7 @@ def fetch_from_bea_api(method: str, itemname: str, params: Optional[Dict[str, st
     def _fetch():
         info(f"Fetching data for method: {method} with params: {params}")
         url = build_bea_api_url(method, params)
+        info(f"Requesting URL: {url}")
         try:
             response = requests.get(url)
             response.raise_for_status()

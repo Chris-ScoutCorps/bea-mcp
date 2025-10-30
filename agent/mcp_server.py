@@ -25,6 +25,8 @@ import signal
 from typing import Any, Dict
 
 from mcp import BeaMcp, get_query_builder_context
+from database import get_all_datasets, get_tables_for_dataset
+from api import fetch_data_from_bea_api
 
 
 RUNNING = True
@@ -70,17 +72,64 @@ def list_tools():
                 "properties": {"question": {"type": "string"}},
                 "required": ["question"],
             },
+        },
+        {
+            "name": "get_all_datasets",
+            "description": "Get all available BEA datasets with their descriptions and parameters",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+        {
+            "name": "get_tables_for_dataset", 
+            "description": "Get all tables for a specific dataset. Params: dataset_name:string",
+            "input_schema": {
+                "type": "object",
+                "properties": {"dataset_name": {"type": "string"}},
+                "required": ["dataset_name"],
+            },
+        },
+        {
+            "name": "fetch_data_from_bea_api",
+            "description": "Fetch raw data from BEA API with custom parameters. Params: params:object",
+            "input_schema": {
+                "type": "object", 
+                "properties": {"params": {"type": "object"}},
+                "required": ["params"],
+            },
         }
     ]
 
 
 def call_tool(name: str, params: Dict[str, Any]):
-    if name != "ask_bea":
+    if name == "ask_bea":
+        question = params.get("question")
+        if not isinstance(question, str) or not question.strip():
+            return {"error": "question must be a non-empty string"}
+        return bea.ask(question.strip())
+    
+    elif name == "get_all_datasets":
+        return get_all_datasets()
+    
+    elif name == "get_tables_for_dataset":
+        dataset_name = params.get("dataset_name")
+        if not isinstance(dataset_name, str) or not dataset_name.strip():
+            return {"error": "dataset_name must be a non-empty string"}
+        return get_tables_for_dataset(dataset_name.strip())
+    
+    elif name == "fetch_data_from_bea_api":
+        api_params = params.get("params")
+        if not isinstance(api_params, dict):
+            return {"error": "params must be an object/dictionary"}
+        try:
+            return fetch_data_from_bea_api(api_params)
+        except Exception as e:
+            return {"error": f"API call failed: {str(e)}"}
+    
+    else:
         return {"error": f"Unknown tool {name}"}
-    question = params.get("question")
-    if not isinstance(question, str) or not question.strip():
-        return {"error": "question must be a non-empty string"}
-    return bea.ask(question.strip())
 
 
 def list_resources():

@@ -61,6 +61,12 @@ List resources:
 Read resource:
 {"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"dataset://NIPA"}}
 
+poetry run python -c "import json; print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'get_all_datasets', 'params': {}}}))" | poetry run python mcp_server.py
+
+poetry run python -c "import json; print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'get_tables_for_dataset', 'params': {'dataset_name': 'NIPA'}}}))" | poetry run python mcp_server.py
+
+poetry run python -c "import json; print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'fetch_data_from_bea_api', 'params': {'params': {'DatasetName': 'NIPA', 'TableName': 'T10101', 'Year': '2023', 'Frequency': 'A'}}}}))" | poetry run python mcp_server.py
+
 ### Response Shape (ask_bea)
 
 {

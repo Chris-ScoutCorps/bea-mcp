@@ -1,5 +1,54 @@
 # bea-mcp
 
+## Quick Start
+
+### Prerequisites
+- Docker and Docker Compose
+- BEA API key (register for free at https://apps.bea.gov/API/signup/)
+- OpenAI API key (requires an OpenAI account) https://platform.openai.com/api-keys
+
+### Setup
+1. **Environment Configuration**
+   ```bash
+   cp .env.template .env
+   ```
+   Edit `.env` and populate the required variables:
+   - `BEA_API_KEY`: Your BEA API key
+   - `OPENAI_API_KEY`: Your OpenAI API key (for the ask_bea tool)
+
+2. **Start Services**
+   ```bash
+   docker-compose up -d
+   ```
+   This starts MongoDB Atlas Local and builds/runs the Python agent.
+
+3. **Access the Container**
+   ```bash
+   docker-compose exec agent bash
+   ```
+   You'll get a bash prompt inside the agent container where you can run the MCP server or CLI tools.
+
+4. **Test the Server**
+   From inside the container:
+   ```bash
+   # Test basic functionality
+   python cli.py "What was the change in US gross domestic product over the past decade?"
+   
+   # Execute Tests
+   pytest
+
+   # Or run the MCP server directly
+   poetry run python mcp_server.py
+   ```
+
+5. **Stop the Server**
+   ```bash
+   # Remove volumes
+   docker-compose down -v
+   ```
+
+   Note: You currently need to remove volumes, because the Mongo Atlas Docker image doesn't handle startup initialization well from existing volumes. It's brand new, so hopefully this issue won't be around for long. It only takes a few seconds to re-populate the database cache from scratch, anyway.
+
 ## MCP Server
 
 This project exposes a minimal Model Context Protocol style JSON-RPC server over stdio for answering economics questions via BEA datasets.

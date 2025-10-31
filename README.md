@@ -4,15 +4,19 @@
 
 This project exposes a minimal Model Context Protocol style JSON-RPC server over stdio for answering economics questions via BEA datasets.
 
+```
 Tools provided:
   ask_bea(question: string) -> structured answer payload including chosen dataset/table, BEA API params, URL, and generated natural language answer.
   get_all_datasets() -> list of all available BEA datasets with metadata
   get_tables_for_dataset(dataset_name: string) -> list of tables for a specific dataset
   fetch_data_from_bea_api(params: object) -> raw data from BEA API with custom parameters
+```
 
+```
 Resources:
   dataset://<DatasetName>            - dataset metadata & parameter definitions
   dataset://<DatasetName>#<TableName> - dataset + specific table context (if table selected)
+```
 
 ### Development Status
 

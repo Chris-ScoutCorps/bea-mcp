@@ -5,7 +5,7 @@ import re
 from logger import info
 
 @dataclass
-class ParsedTable:
+class ParsedNipaTable:
     is_annual: bool
     is_quarterly: bool
     is_monthly: bool
@@ -16,6 +16,12 @@ class ParsedTable:
     section: str
     subsection: str
 
+@dataclass
+class ParsedNonNipaTable:
+    is_annual: bool
+    is_quarterly: bool
+    is_monthly: bool
+    name: str
 
 # NIPA Section mapping based on first number of table
 NIPA_SECTIONS = {
@@ -28,6 +34,7 @@ NIPA_SECTIONS = {
     7: "Supplemental Tables",
     8: "Not Seasonally Adjusted"
 }
+NIPA_SECTIONS_LIST = '\n'.join(f"- {num}: {desc}" for num, desc in NIPA_SECTIONS.items())
 
 # NIPA Metric mapping based on last number of table
 NIPA_METRICS = {
@@ -43,6 +50,7 @@ NIPA_METRICS = {
     10: "Percentage shares of GDP",
     11: "Percent change from (quarter or month) one year ago"
 }
+NIPA_METRICS_LIST = '\n'.join(f"- {num}: {desc}" for num, desc in NIPA_METRICS.items())
 
 # Examples of NIPA tables
 """
@@ -57,13 +65,23 @@ Common substring / subsection name: "Gross Domestic Product by Major Type of Pro
 """
 
 def extract_table_content(table_name: str) -> Optional[str]:
-    """Extract the content between 'Table X.Y.Z. ' and frequency indicators like '(A) (Q)'."""
-    # Remove table number prefix
-    content_match = re.search(r'Table\s+\d+\.\d+\.\d+\.\s+(.+)', table_name)
-    if not content_match:
-        return None
+    """Extract the content between 'Table X.Y.Z. ' and frequency indicators like '(A) (Q)'.
     
-    content = content_match.group(1)
+    Handles various formats:
+    - Table 1.2.1. Content (A) (Q)
+    - Table 1.12. Content (A)
+    - Table 2BUI. Content [brackets] (A) (M) (Q)
+    """
+    # Match: Table <anything>. <content> [optional brackets] (optional frequency indicators)
+    # Capture the table identifier and content
+    content_match = re.search(r'Table\s+([^\s]+)\.\s+(.+)', table_name)
+    if not content_match:
+        return table_name  # Unable to parse, return full name
+    
+    content = content_match.group(2)
+    
+    # Remove bracketed content like [Index base 2017, 1997 forward, NAICS]
+    content = re.sub(r'\s*\[[^\]]+\]\s*', ' ', content)
     
     # Remove frequency indicators (A), (Q), (M) from the end
     content = re.sub(r'\s*\([AMQ]\)\s*', ' ', content).strip()
@@ -96,7 +114,7 @@ def longest_common_substring(strings: List[str]) -> str:
     
     return longest.strip()
 
-def parse_nipa_table_desc(table_name: str, subsection_tables: List[str]) -> Optional[ParsedTable]:
+def parse_nipa_table_desc(table_name: str, subsection_tables: List[str]) -> Optional[ParsedNipaTable]:
     """
     Parse NIPA table name to extract section, frequency flags, and data item name.
     
@@ -105,7 +123,7 @@ def parse_nipa_table_desc(table_name: str, subsection_tables: List[str]) -> Opti
         subsection_tables: List of all table names in the same subsection (X.Y) to compute common data item name
         
     Returns:
-        ParsedTable with parsed information, or None if not a valid NIPA table
+        ParsedNipaTable with parsed information, or None if not a valid NIPA table
     """
     # Try three-part number like "1.2.1"
     number_match = re.search(r'(\d+)\.(\d+)\.(\d+)', table_name)
@@ -151,7 +169,7 @@ def parse_nipa_table_desc(table_name: str, subsection_tables: List[str]) -> Opti
     is_quarterly = '(Q)' in table_name
     is_monthly = '(M)' in table_name
     
-    return ParsedTable(
+    return ParsedNipaTable(
         subsection=data_item_name,
         is_annual=is_annual,
         is_quarterly=is_quarterly,
@@ -161,6 +179,31 @@ def parse_nipa_table_desc(table_name: str, subsection_tables: List[str]) -> Opti
         sub_subsection_letter=sub_subsection_letter,
         table_number=table_num,
         section=section
+    )
+
+def parse_non_nipa_table_desc(table_name: str) -> ParsedNonNipaTable:
+    """
+    Parse non-NIPA table name to extract frequency flags and name.
+    
+    Args:
+        table_name: Table name (e.g., "Table 2BUI. Implicit Price Deflators... [Index...] (A) (Q) (M)")
+        
+    Returns:
+        ParsedNonNipaTable with parsed information
+    """
+    # Extract table content (removes "Table X.", brackets, and frequency indicators)
+    name = extract_table_content(table_name)
+    
+    # Check frequency indicators
+    is_annual = '(A)' in table_name
+    is_quarterly = '(Q)' in table_name
+    is_monthly = '(M)' in table_name
+    
+    return ParsedNonNipaTable(
+        name=name,
+        is_annual=is_annual,
+        is_quarterly=is_quarterly,
+        is_monthly=is_monthly
     )
 
 def get_nipa_table_subsection_id(table_name: str) -> Optional[str]:
@@ -233,6 +276,8 @@ def build_lookup_documents(datasets: List[Dict[str, Any]]) -> List[Dict[str, Any
                     key = get_nipa_table_subsection_id(table_description)
                     parsed = parse_nipa_table_desc(table_description, subsection_tables_map.get(key, []))
                     document['meta'] = asdict(parsed) if parsed else None
+                else:
+                    document['meta'] = asdict(parse_non_nipa_table_desc(table_description))
 
                 # Add other parameters with their names and descriptions
                 for param in other_parameters:

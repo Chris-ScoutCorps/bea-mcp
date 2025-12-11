@@ -73,6 +73,11 @@ def build_document_embedding_text(doc: Dict[str, Any]) -> str:
 def embed_document_in_place(doc: Dict[str, Any]) -> Dict[str, Any]:
     text = build_document_embedding_text(doc)
     doc["embedding"] = embed_text(text)
+    
+    # Coalesce: meta.subsection -> meta.name -> table_description
+    meta = doc.get("meta") or {}
+    table_desc_text = meta.get("subsection") or meta.get("name") or doc.get("table_description", "")
+    doc["table_desc_embedding"] = embed_text(table_desc_text)
     return doc
 
 def embed_documents(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -80,6 +85,11 @@ def embed_documents(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     vectors = _do_embed(texts)
     for d, v in zip(docs, vectors):
         d["embedding"] = v
+        
+        # Coalesce: meta.subsection -> meta.name -> table_description
+        meta = d.get("meta") or {}
+        table_desc_text = meta.get("subsection") or meta.get("name") or d.get("table_description", "")
+        d["table_desc_embedding"] = embed_text(table_desc_text)
     return docs
 
 def embed_query(query: str) -> List[float]:

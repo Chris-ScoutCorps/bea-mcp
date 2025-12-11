@@ -171,7 +171,7 @@ def get_tables_for_dataset(dataset_name: str) -> List[Dict[str, str]]:
     collection = ensure_collection(Collections.DATA_LOOKUP.value)
 
     try:
-        tables = list(collection.find({ 'dataset_name': dataset_name }, {'_id': 0, 'embedding': 0}))  # Exclude _id field
+        tables = list(collection.find({ 'dataset_name': dataset_name }, {'_id': 0, 'embedding': 0, 'table_desc_embedding': 0}))  # Exclude _id field
         return tables
     except Exception as e:
         info(f"Error retrieving tables: {e}")
@@ -218,6 +218,7 @@ def refresh_data_lookup(documents: List[Dict]) -> bool:
     # Attempt to (re)create vector search index (Atlas / Atlas Local only)
     try:
         create_vector_search_index()
+        create_vector_search_index(index_name="short_data_lookup_vector", embedding_field="table_desc_embedding")
     except Exception as e:
         info(f"Warning: could not create vector search index: {e}")
     # Ensure weighted legacy text index (always available)
@@ -460,6 +461,8 @@ def hybrid_text_vector_search(
     num_candidates: int = 200,
     mode: str = "atlas_compound",
     dataset_name_filter: Optional[str] = None,
+    section_number_filter: Optional[int] = None,
+    table_number_filter: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Hybrid search combining text and vector relevance when possible.
 
@@ -486,14 +489,22 @@ def hybrid_text_vector_search(
 
     if mode == "atlas_compound" and (text_query or query_vector is not None):
         # Attempt compound using Atlas Search
-        compound: Dict[str, Any] = {"must": [], "should": []}
+        compound: Dict[str, Any] = {"must": [], "should": [], "filter": []}
         if dataset_name_filter:
             # Use filter clause for exact match if supported
             # 'equals' operator (Atlas Search) is more explicit than text for exact string equality
             # Fallback will occur automatically if not supported (caught by exception below)
-            compound["filter"] = [
+            compound["filter"].append(
                 {"equals": {"path": "dataset_name", "value": dataset_name_filter}}
-            ]
+            )
+        if section_number_filter is not None:
+            compound["filter"].append(
+                {"equals": {"path": "meta.section_number", "value": section_number_filter}}
+            )
+        if table_number_filter is not None:
+            compound["filter"].append(
+                {"equals": {"path": "meta.table_number", "value": table_number_filter}}
+            )
         if text_query:
             compound["must"].append({
                 "text": {

@@ -4,6 +4,7 @@ import copy
 from llm import get_small_llm, get_medium_llm, get_large_llm
 from database import hybrid_text_vector_search, list_datasets_descriptions
 from embeddings import embed_query
+from lookup import NIPA_SECTIONS_LIST, NIPA_METRICS_LIST
 from logger import info
 
 def select_dataset(question: str) -> str:
@@ -26,19 +27,119 @@ def select_dataset(question: str) -> str:
         info(f"Answer generation failed: {e}")
         exit(1)
 
-def smart_search(query: str, dataset_name: str) -> list:
-    base_vector = embed_query(query)
-    INITIAL_RESULTS = 25
+def extract_data_item(question: str) -> str:
+    try:
+        llm = get_medium_llm()
+        prompt = f"""Given a natural language question, try to isolate out the data item being asked about.
+        Ignore specifiers such as time period, geography, units, and phrases such as "Current dollars" or "Seasonally adjusted" or "Estimated".
+        Return ONLY the data item as a short phrase.
 
-    # Step 1: initial general results
-    results = hybrid_text_vector_search(
+        Question: \"{question}\""""
+        resp = llm.invoke(prompt)
+        return getattr(resp, 'content', str(resp)).strip()
+    except Exception as e:
+        info(f"Answer generation failed: {e}")
+        exit(1)
+
+def smart_search(query: str, dataset_name: str) -> list:
+    query_vector = embed_query(query)
+    extracted_data_item = extract_data_item(query)
+    info(f"Extracted data item for search: '{extracted_data_item}'")
+    data_item_vector = embed_query(extracted_data_item)
+    
+    section_number = None
+    metric_number = None
+
+    if dataset_name == 'NIPA':
+        # provide medium LLM with a bulleted list of NIPA_SECTIONS and ask to which this question pertains (or none if unsure)
+        # provide medium LLM with a bulleted list of NIPA_METRICS and ask to which this question pertains (or none if unsure)
+        llm = get_medium_llm()
+        
+        # Ask about relevant NIPA sections
+        sections_prompt = f"""Given the following question, identify which NIPA section is most relevant.
+Return ONLY the most relevant section number as an integer, or "none" if unsure.
+
+Question: "{query}"
+
+NIPA Sections:
+{NIPA_SECTIONS_LIST}
+
+Relevant section number:"""
+        
+        try:
+            sections_resp = llm.invoke(sections_prompt)
+            section_number = int(getattr(sections_resp, 'content', str(sections_resp)).strip().lower())
+            info(f"NIPA section identified: {section_number}")
+        except Exception as e:
+            info(f"NIPA section identification failed: {e}")
+        
+        # Ask about relevant NIPA metrics
+        metrics_prompt = f"""Given the following question, identify which NIPA metric is most relevant.
+Return ONLY the most relevant section number as an integer, or "none" if unsure.
+
+Question: "{query}"
+
+NIPA Metrics:
+{NIPA_METRICS_LIST}
+
+Relevant metric number:"""
+        
+        try:
+            metrics_resp = llm.invoke(metrics_prompt)
+            metric_number = int(getattr(metrics_resp, 'content', str(metrics_resp)).strip().lower())
+            info(f"NIPA metric identified: {metric_number}")
+        except Exception as e:
+            info(f"NIPA metric identification failed: {e}")
+
+    results_full = hybrid_text_vector_search(
         dataset_name_filter=dataset_name,
         text_query=query,
-        query_vector=base_vector,
-        limit=INITIAL_RESULTS
+        query_vector=query_vector,
+        limit=25,
+        section_number_filter=section_number,
+        table_number_filter=metric_number
     )
 
-    return results
+    results_short = hybrid_text_vector_search(
+        dataset_name_filter=dataset_name,
+        text_query=extracted_data_item,
+        query_vector=data_item_vector,
+        vector_index="short_data_lookup_vector",
+        vector_field="table_desc_embedding",
+        limit=25,
+        section_number_filter=section_number,
+        table_number_filter=metric_number
+    )
+
+    if not results_full and not results_short:
+        results_full = hybrid_text_vector_search(
+            dataset_name_filter=dataset_name,
+            limit=200
+        )
+
+    info(f"Smart search found {len(results_full)} full results and {len(results_short)} short results.")
+
+    # Deduplicate on _id, tracking count and original order
+    seen = {}
+    order = []
+    
+    for result in results_full + results_short:
+        doc_id = result.get('_id')
+        if doc_id not in seen:
+            seen[doc_id] = {'doc': result, 'count': 1, 'first_position': len(order)}
+            order.append(doc_id)
+        else:
+            seen[doc_id]['count'] += 1
+    
+    # Sort by count (descending), then by original first appearance position
+    sorted_ids = sorted(order, key=lambda doc_id: (-seen[doc_id]['count'], seen[doc_id]['first_position']))
+    deduplicated = [seen[doc_id]['doc'] for doc_id in sorted_ids]
+    
+    info(f"Deduplicated to {len(deduplicated)} unique results.")
+    for result in deduplicated:
+        info(f"  - {result.get('table_description', 'N/A')}")
+
+    return deduplicated
 
 def print_datasets(datasets):
     for dataset in datasets:
@@ -65,11 +166,11 @@ def score_dataset_relevance(question: str, dataset: dict, llm=None) -> int:
     ) or "(none)"
 
     prompt = f"""
-You are a data relevance assessor. A user asks a question and you have a dataset (and maybe a table) description plus other parameter metadata.
+You are a data relevance assessor. A user asks a qestion and you have a dataset (and maybe a table) description plus other parameter metadata.
 Rate your confidence that querying this dataset/table will help answer the user's question.
 Consider parameter names/descriptions if they are indicative of relevant dimensions or measures.
 
-Return ONLY an integer 0-100. No words, no percent sign.
+Return ONLY an integer 0-100. No words, no percent sign.u
 
 Question: {question}
 Table Name: {table}

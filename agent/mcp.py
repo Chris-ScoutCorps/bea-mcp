@@ -205,8 +205,6 @@ class BeaMcp:
         else:
             info(f"Using cached data lookup ({len(data_lookup)} entries).")
 
-        exit(1)
-
         for dataset in datasets:
             if 'DetailedDescription' not in dataset or 'GeneratedDescription' not in dataset:
                 matching_tables = [

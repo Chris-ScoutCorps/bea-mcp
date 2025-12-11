@@ -100,6 +100,35 @@ def upsert_dataset(dataset_name: str, dataset: Dict[str, str]) -> bool:
         info(f"Error upserting dataset: {e}")
         return False
 
+def append_detailed_description_to_dataset(dataset_name: str, detailed: str, generated: str) -> bool:
+    """
+    Appends our own generated description(s) to an existing dataset's.
+    
+    Args:
+        dataset_name: Unique name for the dataset
+        description: Generated description to append
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    collection = ensure_collection(Collections.DATASETS.value)
+    
+    try:
+        collection.update_one(
+            {'DatasetName': dataset_name},
+            {
+                '$set': {
+                    'GeneratedDescription': generated,
+                    'DetailedDescription': detailed
+                }
+            },
+            upsert=True
+        )
+        return True
+    except Exception as e:
+        info(f"Error upserting dataset: {e}")
+        return False
+
 def get_all_datasets() -> List[Dict[str, str]]:
     """
     Get all datasets from the database.

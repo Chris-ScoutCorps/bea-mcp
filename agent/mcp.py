@@ -5,10 +5,11 @@ import json
 import sys
 
 from api import fetch_and_upsert_bea_datasets, fetch_data_from_bea_api, fetch_data_from_bea_api_url
-from database import get_all_datasets, get_data_lookup, refresh_data_lookup
+from database import append_detailed_description_to_dataset, get_all_datasets, get_data_lookup, refresh_data_lookup
 from lookup import build_lookup_documents
 from pick_dataset import choose_datasets_to_query, get_query_builder_context, smart_search, score_and_select_top, print_datasets
 from llm import get_large_llm
+from summarize import summarize_dataset_description
 from logger import info
 
 def build_bea_params_with_llm(question: str, context: dict) -> dict:
@@ -203,6 +204,33 @@ class BeaMcp:
             refresh_data_lookup(data_lookup)
         else:
             info(f"Using cached data lookup ({len(data_lookup)} entries).")
+
+        for dataset in datasets:
+            if 'DetailedDescription' not in dataset or 'GeneratedDescription' not in dataset:
+                matching_tables = [
+                    item for item in data_lookup 
+                    if item.get('dataset_name') == dataset.get('DatasetName')
+                ]
+                
+                table_bullets = "\n".join([
+                    f"- {item.get('table_name', 'Unknown')}: {item.get('table_description', 'No description')}"
+                    for item in matching_tables
+                ])
+                if table_bullets == "- Unknown: No description":
+                    table_bullets = "- No tables found."
+                
+                param_bullets = "\n".join([
+                    f"- {item.get('ParameterName')}: {item.get('ParameterDescription', 'No description')}"
+                    for item in dataset.get('Parameters', [])
+                ])
+
+                detailed = dataset['DatasetDescription'] + "\n\nTables:\n" + table_bullets + "\n\nParameters:\n" + param_bullets
+                dataset['DetailedDescription'] = detailed
+
+                info(f"Summarizing {dataset['DatasetName']}")
+                dataset['GeneratedDescription'] = summarize_dataset_description(detailed)
+
+                append_detailed_description_to_dataset(dataset['DatasetName'], detailed, dataset['GeneratedDescription'])
 
         self.datasets = datasets
         self.data_lookup = data_lookup

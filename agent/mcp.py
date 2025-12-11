@@ -5,7 +5,7 @@ import json
 import sys
 
 from api import fetch_and_upsert_bea_datasets, fetch_data_from_bea_api, fetch_data_from_bea_api_url
-from database import get_all_datasets, refresh_data_lookup
+from database import get_all_datasets, get_data_lookup, refresh_data_lookup
 from lookup import build_lookup_documents
 from pick_dataset import choose_datasets_to_query, get_query_builder_context, smart_search, score_and_select_top, print_datasets
 from llm import get_large_llm
@@ -190,12 +190,19 @@ class BeaMcp:
             else:
                 info("No existing datasets found. Fetching dataset metadata from BEA API...")
             datasets = fetch_and_upsert_bea_datasets()
+            refreshed_datasets = True
         else:
             info(f"Using cached dataset metadata ({len(existing)} datasets). Set BEA_FORCE_REFRESH=1 to refresh on next start.")
             datasets = existing
+            refreshed_datasets = False
 
-        data_lookup = build_lookup_documents(datasets)
-        refresh_data_lookup(data_lookup)
+        data_lookup = get_data_lookup()
+        if refreshed_datasets or not data_lookup:
+            info("No existing data lookup found. Building from datasets...")
+            data_lookup = build_lookup_documents(datasets)
+            refresh_data_lookup(data_lookup)
+        else:
+            info(f"Using cached data lookup ({len(data_lookup)} entries).")
 
         self.datasets = datasets
         self.data_lookup = data_lookup

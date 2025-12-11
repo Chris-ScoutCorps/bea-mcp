@@ -116,6 +116,22 @@ def get_all_datasets() -> List[Dict[str, str]]:
         info(f"Error retrieving datasets: {e}")
         return []
 
+def get_data_lookup() -> List[Dict[str, str]]:
+    """
+    Get data lookup information from the database.
+    
+    Returns:
+        List of dictionaries containing data lookup information
+    """
+    collection = ensure_collection(Collections.DATA_LOOKUP.value)
+    
+    try:
+        lookup = list(collection.find({}, {'_id': 0}))  # Exclude _id field
+        return lookup
+    except Exception as e:
+        info(f"Error retrieving data lookup: {e}")
+        return []
+
 def get_tables_for_dataset(dataset_name: str) -> List[Dict[str, str]]:
     """
     Get all tables for a specific dataset from the database.

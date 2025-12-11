@@ -1,45 +1,42 @@
 import json
 import copy
+
 from llm import get_small_llm, get_medium_llm, get_large_llm
 from database import hybrid_text_vector_search, list_datasets_descriptions
 from embeddings import embed_query
 from logger import info
 
-def smart_search(query: str):
-    """Perform search following this method:
-    1. Fetch exactly 25 initial (unfiltered) results.
-    2. If fewer than 10 NIPA in those 25, fetch 10 NIPA-only results.
-    3. Merge, removing duplicates (preserve original order; NIPA supplement appended).
-    """
+def select_dataset(question: str) -> str:
+    """Given a natural language question, select relevant datasets and tables."""
 
+    datasets = '\n'.join('- ' + d for d in list_datasets_descriptions())
+
+    try:
+        llm = get_large_llm()
+        prompt = f"""Choose the best data set from the following list to answer the given question.
+        Answer with the data set name and no other text.
+        Question: \"{question}\"
+        
+        {datasets}
+"""
+        resp = llm.invoke(prompt)
+        answer = getattr(resp, 'content', str(resp)).strip()
+        return ':' in answer and answer.split(':')[0].strip() or answer
+    except Exception as e:
+        info(f"Answer generation failed: {e}")
+        exit(1)
+
+def smart_search(query: str, dataset_name: str) -> list:
     base_vector = embed_query(query)
     INITIAL_RESULTS = 25
-    NIPA_TARGET = 10
 
     # Step 1: initial general results
     results = hybrid_text_vector_search(
+        dataset_name_filter=dataset_name,
         text_query=query,
         query_vector=base_vector,
         limit=INITIAL_RESULTS
     )
-
-    # Step 2: count NIPA
-    nipa_count = sum(1 for r in results if r.get('dataset_name') == 'NIPA')
-
-    # Step 3: if fewer than 10 NIPA, fetch 10 NIPA-only results (not just the diff) and merge
-    if nipa_count < NIPA_TARGET:
-        nipa_supplement = hybrid_text_vector_search(
-            text_query=query,
-            query_vector=base_vector,
-            dataset_name_filter='NIPA',
-            limit=NIPA_TARGET
-        )
-        existing_ids = {r.get('_id') for r in results if '_id' in r}
-        for doc in nipa_supplement:
-            doc_id = doc.get('_id')
-            if doc_id not in existing_ids:
-                results.append(doc)
-                existing_ids.add(doc_id)
 
     return results
 
@@ -59,9 +56,7 @@ def score_dataset_relevance(question: str, dataset: dict, llm=None) -> int:
     """
     if llm is None:
         llm = get_small_llm()
-    name = dataset.get('dataset_name','')
     table = dataset.get('table_name','')
-    desc = dataset.get('dataset_description','') or ''
     table_desc = dataset.get('table_description','') or ''
     # Consolidate other parameter names & descriptions for additional context
     other_params_list = dataset.get('other_parameters', []) or []
@@ -74,15 +69,10 @@ You are a data relevance assessor. A user asks a question and you have a dataset
 Rate your confidence that querying this dataset/table will help answer the user's question.
 Consider parameter names/descriptions if they are indicative of relevant dimensions or measures.
 
-Note that 'Standard NIPA tables' is the main data set - if there's not a reason to pick another, prefer NIPA. Consider going outside of NIPA for the following topics:
-{"\n".join([f"- {d}" for d in list_datasets_descriptions() if " NIPA " not in f" {d} "])}
-
 Return ONLY an integer 0-100. No words, no percent sign.
 
 Question: {question}
-Dataset Name: {name}
 Table Name: {table}
-Dataset Description: {desc}
 Table Description: {table_desc}
 Other Parameters:\n{other_params_text}
 
@@ -105,12 +95,12 @@ Confidence (0-100):
         # Simple heuristic fallback
         heuristic = 0
         q_lower = question.lower()
-        text = f"{name} {table} {desc} {table_desc}".lower()
+        text = f"{dataset.get('dataset_name','')} {table} {table_desc}".lower()
         if any(tok in text for tok in q_lower.split()):
             heuristic = 30
         if 'gdp' in q_lower and 'gdp' in text:
             heuristic += 30
-        if name == 'NIPA':
+        if dataset.get('dataset_name','') == 'NIPA':
             heuristic += 20
         return min(100, heuristic)
 

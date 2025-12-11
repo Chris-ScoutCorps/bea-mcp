@@ -182,13 +182,13 @@ def list_datasets_descriptions() -> List[str]:
     Get a simplified list of datasets with name and description.
     
     Returns:
-        List of dicts with DatasetName and DatasetDescription
+        List of dicts with DatasetName and GeneratedDescription
     """
     collection = ensure_collection(Collections.DATASETS.value)
     
     try:
-        datasets = list(collection.find({}, {'_id': 0, 'DatasetDescription': 1}))
-        return [dataset['DatasetDescription'] for dataset in datasets]
+        datasets = list(collection.find({}, {'_id': 0, 'DatasetName': 1, 'GeneratedDescription': 1}))
+        return [dataset['DatasetName'] + ": " + dataset['GeneratedDescription'] for dataset in datasets]
     except Exception as e:
         info(f"Error listing datasets: {e}")
         return []

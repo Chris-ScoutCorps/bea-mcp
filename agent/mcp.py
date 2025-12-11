@@ -7,7 +7,7 @@ import sys
 from api import fetch_and_upsert_bea_datasets, fetch_data_from_bea_api, fetch_data_from_bea_api_url
 from database import append_detailed_description_to_dataset, get_all_datasets, get_data_lookup, refresh_data_lookup
 from lookup import build_lookup_documents
-from pick_dataset import choose_datasets_to_query, get_query_builder_context, smart_search, score_and_select_top, print_datasets
+from pick_dataset import choose_datasets_to_query, get_query_builder_context, select_dataset, smart_search, score_and_select_top, print_datasets
 from llm import get_large_llm
 from summarize import summarize_dataset_description
 from logger import info
@@ -242,7 +242,10 @@ class BeaMcp:
           question, top10, chosen, bea_params, bea_url, fetch_status, error (optional), corrected_params (optional)
         """
 
-        results = smart_search(question)
+        best_dataset = select_dataset(question)
+        info(f"Selected dataset for question: {best_dataset}")
+        
+        results = smart_search(question, best_dataset)
         top10, _all_scored = score_and_select_top(question, results, top_n=10)
         if not top10:
             return { 'question': question, 'fetch_status': 'no_datasets' }

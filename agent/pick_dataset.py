@@ -151,70 +151,85 @@ def print_datasets(datasets):
             info(f"   Table Description: {dataset.get('table_description')}")
     info(f"-----------------")
 
-def score_dataset_relevance(question: str, dataset: dict, llm=None) -> int:
-    """Ask a small LLM to rate confidence (0-100) that this dataset/table can answer the question.
-    Falls back to heuristic if LLM call fails.
-    """
-    if llm is None:
-        llm = get_small_llm()
-    table = dataset.get('table_name','')
-    table_desc = dataset.get('table_description','') or ''
-    # Consolidate other parameter names & descriptions for additional context
-    other_params_list = dataset.get('other_parameters', []) or []
-    other_params_text = "\n".join(
-        f"- {p.get('parameter_name','')}: {p.get('parameter_description','')}" for p in other_params_list
-    ) or "(none)"
+def score_and_select_top(question: str, results: list, top_n: int = 10):
+    """Use large LLM to evaluate and rank all results in a single call, returning top N."""
+    if not results:
+        return [], []
+    
+    llm = get_large_llm()
+    
+    # Build a numbered list of all results with key information
+    results_list = []
+    for i, r in enumerate(results, 1):
+        table_name = r.get('table_name', 'N/A')
+        table_desc = r.get('table_description', 'N/A')
+        dataset_name = r.get('dataset_name', 'N/A')
+        results_list.append(f"{i}. Table: {table_name}\n   Dataset: {dataset_name}\n   Description: {table_desc}")
+    
+    results_text = '\n\n'.join(results_list)
+    
+    prompt = f"""You are evaluating which tables are most relevant to answer a user's question.
+Below is a numbered list of tables with their descriptions.
 
-    prompt = f"""
-You are a data relevance assessor. A user asks a qestion and you have a dataset (and maybe a table) description plus other parameter metadata.
-Rate your confidence that querying this dataset/table will help answer the user's question.
-Consider parameter names/descriptions if they are indicative of relevant dimensions or measures.
+Question: "{question}"
 
-Return ONLY an integer 0-100. No words, no percent sign.u
+Tables:
+{results_text}
 
-Question: {question}
-Table Name: {table}
-Table Description: {table_desc}
-Other Parameters:\n{other_params_text}
+Return ONLY a comma-separated list of the numbers of the top {top_n} most relevant tables, in order from most to least relevant.
+If/when all else is equal, prefer simplicity (e.g, a "x" is better than "x by industry" unless they're asking for industry detail).
+Example response: 3,7,1,12,5,9,2,15,8,4
 
-Confidence (0-100):
-"""
+Your response:"""
+    
     try:
         response = llm.invoke(prompt)
-        # langchain ChatOpenAI returns AIMessage with .content
         content = getattr(response, 'content', str(response)).strip()
-        # Extract leading integer
-        num = ''.join(ch for ch in content if ch.isdigit())
-        if num == '':
-            return 0
-        score = int(num[:3])  # guard against overly long
-        if score < 0: score = 0
-        if score > 100: score = 100
-        return score
+        
+        # Parse the comma-separated numbers
+        selected_indices = []
+        for part in content.split(','):
+            try:
+                num = int(part.strip())
+                if 1 <= num <= len(results):
+                    selected_indices.append(num - 1)  # Convert to 0-based index
+            except ValueError:
+                continue
+        
+        # Ensure we have at least some results
+        if not selected_indices:
+            info("LLM returned no valid indices, using original order")
+            selected_indices = list(range(min(top_n, len(results))))
+        
+        # Build the top results in the order specified by the LLM
+        top_results = []
+        for idx in selected_indices[:top_n]:
+            r_copy = dict(results[idx])
+            r_copy['confidence'] = 100 - (len(top_results) * 10)  # Descending confidence based on rank
+            top_results.append(r_copy)
+        
+        # Build full scored list (selected items get scores, rest get 0)
+        all_scored = []
+        for i, r in enumerate(results):
+            r_copy = dict(r)
+            if i in selected_indices:
+                rank = selected_indices.index(i)
+                r_copy['confidence'] = 100 - (rank * 10)
+            else:
+                r_copy['confidence'] = 0
+            all_scored.append(r_copy)
+        
+        return top_results, all_scored
+        
     except Exception as e:
-        info(f"LLM scoring failed: {e}")
-        # Simple heuristic fallback
-        heuristic = 0
-        q_lower = question.lower()
-        text = f"{dataset.get('dataset_name','')} {table} {table_desc}".lower()
-        if any(tok in text for tok in q_lower.split()):
-            heuristic = 30
-        if 'gdp' in q_lower and 'gdp' in text:
-            heuristic += 30
-        if dataset.get('dataset_name','') == 'NIPA':
-            heuristic += 20
-        return min(100, heuristic)
-
-def score_and_select_top(question: str, results: list, top_n: int = 10):
-    llm = get_small_llm()
-    scored = []
-    for r in results:
-        score = score_dataset_relevance(question, r, llm=llm)
-        r_copy = dict(r)
-        r_copy['confidence'] = score
-        scored.append(r_copy)
-    scored.sort(key=lambda x: x.get('confidence',0), reverse=True)
-    return scored[:top_n], scored
+        info(f"LLM ranking failed: {e}, using original order")
+        # Fallback to original order
+        scored = []
+        for i, r in enumerate(results):
+            r_copy = dict(r)
+            r_copy['confidence'] = max(0, 100 - (i * 10))
+            scored.append(r_copy)
+        return scored[:top_n], scored
 
 def get_query_builder_context(dataset_name: str, table_name: str, full_datasets: list, for_eval: bool) -> str:
     # 1. Identify the dataset by name (exactly one expected)

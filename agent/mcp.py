@@ -253,17 +253,19 @@ class BeaMcp:
         info("Top 10 candidate datasets/tables:")
         for ds in top10:
             # Create a copy without embedding and other_parameters for display
-            display_ds = {k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'other_parameters')}
+            display_ds = {k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'table_desc_embedding', 'other_parameters')}
             info(display_ds)
 
         selection = choose_datasets_to_query(question, top10, self.datasets, tie_threshold=3)
         chosen = selection.get('top')
 
+        info("")
         info(f"Chosen: {json.dumps(chosen, indent=2)}")
+        info("")
 
         # Remove _id from chosen and top10 before including in result to avoid ObjectId serialization errors
-        chosen_clean = {k: v for k, v in chosen.items() if k not in ('_id', 'embedding', 'other_parameters')}
-        top10_clean = [{k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'other_parameters')} for ds in top10]
+        chosen_clean = {k: v for k, v in chosen.items() if k not in ('_id', 'embedding', 'table_desc_embedding', 'other_parameters')}
+        top10_clean = [{k: v for k, v in ds.items() if k not in ('_id', 'embedding', 'table_desc_embedding', 'other_parameters')} for ds in top10]
 
         context = get_query_builder_context(
             dataset_name=chosen.get('dataset_name'),

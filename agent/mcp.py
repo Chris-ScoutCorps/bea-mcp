@@ -205,6 +205,8 @@ class BeaMcp:
         else:
             info(f"Using cached data lookup ({len(data_lookup)} entries).")
 
+        exit(1)
+
         for dataset in datasets:
             if 'DetailedDescription' not in dataset or 'GeneratedDescription' not in dataset:
                 matching_tables = [
@@ -244,7 +246,7 @@ class BeaMcp:
 
         best_dataset = select_dataset(question)
         info(f"Selected dataset for question: {best_dataset}")
-        
+
         results = smart_search(question, best_dataset)
         top10, _all_scored = score_and_select_top(question, results, top_n=10)
         if not top10:

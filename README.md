@@ -1,5 +1,22 @@
 # bea-mcp
 
+## About
+
+This is an open source project, designed as a demonstration of an end-to-end workflow.  
+The ask_bea tool in particular should be considered a starting point / prototype, and not a production-ready function.  
+
+Initial development funded by [BrightQuery](https://brightquery.com/)  
+Ongoing maintenance on volunteer time from [Scout Corps](https://www.scoutcorpsllc.com/)
+
+### Development Status
+
+- The "basic" tools, get_all_datasets, get_tables_for_dataset, and fetch_data_from_bea_api should behave deterministically and are essentially complete
+- The "advanced" tool uses those three (with a bunch of keyword and vector search functionality and LLM agents) to attempt to answer natural language questions using data from the BEA's API
+  - It's not deterministic
+  - It is NOT done, but rather should be considered a demonstration of an end-to-end workflow
+  - It completes the assignment in that it reads the question, picks a dataset, forms a request, and interpret the results
+  - It doesn't always pick the right data set, though. Most of the TODO's below pertain to improving that.
+
 ## Quick Start
 
 ### Prerequisites
@@ -67,21 +84,12 @@ Resources:
   dataset://<DatasetName>#<TableName> - dataset + specific table context (if table selected)
 ```
 
-### Development Status
-
-- The "basic" tools, get_all_datasets, get_tables_for_dataset, and fetch_data_from_bea_api should behave deterministically and are essentially complete
-- The "advanced" tool uses those three (with a bunch of keyword and vector search functionality and LLM agents) to attempt to answer natural language questions using data from the BEA's API
-  - It's not deterministic
-  - It is NOT done, but rather should be considered a demonstration of an end-to-end workflow
-  - It completes the assignment in that it reads the question, picks a dataset, forms a request, and interpret the results
-  - It frequently picks the wrong dataset, though. Most of the TODO's below pertain to improving that.
-
 ### TODOs for ask_bea
 
 The most important action item, IMO, is to pre-process the metadata along with human readble explanations and clear keywords, to help it find the right data set.
-- Come up with natural language summaries of data sets, vector embed them, and use these to relate data sets to questions
 - Generate sample questions for data sets, vector embed them, and use these to relate data sets to questions
 - Generate topics and synonyms for data sets, vector embed them. Do the same for questions that are asked by the user, and use these to relate data sets to questions
+It's doing _okay_ now, but it's slow, overly complex, and still not as accurate as it could be. This represents 2-3 days of work so judge it accordingly :-)
 
 The second most important is going to be for it to more cleverly determine whether the question applies to more than one data set.
 - See third bullet point above for deciding on correct data sets
